@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@builder.io/qwik':
+        specifier: ^1.17.2
+        version: 1.17.2(vite@6.4.1(@types/node@24.10.1))
+      '@qwikdev/astro':
+        specifier: ^0.8.2
+        version: 0.8.2(@builder.io/qwik@1.17.2(vite@6.4.1(@types/node@24.10.1)))(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3))(vite@6.4.1(@types/node@24.10.1))
       astro:
         specifier: ^5.16.2
         version: 5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3)
@@ -47,6 +53,13 @@ packages:
   '@babel/types@7.28.5':
     resolution: {integrity: sha512-qQ5m48eI/MFLQ5PxQj4PFaprjyCTLI37ElWMmNs0K8Lk3dVeOdNpB3ks8jc7yM5CDmVC73eMVk/trk3fgmrUpA==}
     engines: {node: '>=6.9.0'}
+
+  '@builder.io/qwik@1.17.2':
+    resolution: {integrity: sha512-RLtiF0cA1ZSEV/o05cM38V0vkW/cP+O3pCjqcjxPWl/TYgPqZSPhy2MaT0tBDpwx5gOhq53uaRiq+/Gq8+oFqA==}
+    engines: {node: '>=16.8.0 <18.0.0 || >=18.11'}
+    hasBin: true
+    peerDependencies:
+      vite: '>=5 <8'
 
   '@capsizecss/unpack@3.0.1':
     resolution: {integrity: sha512-8XqW8xGn++Eqqbz3e9wKuK7mxryeRjs4LOHLxbh2lwKeSbuNR4NFifDZT4KzvjU6HMOPbiNTsWpniK5EJfTWkg==}
@@ -348,11 +361,33 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@inox-tools/aik-mod@0.11.0':
+    resolution: {integrity: sha512-0mFOrKPa2jz23g4caa7+MsxitiKMgyzn/4e+mLdpEzlWnB0HZP50AeL2rX6CioKw+Pi2zgo96mYDc1skh0/Otg==}
+    peerDependencies:
+      astro: ^5
+      astro-integration-kit: ~0.17 || ~0.18
+
+  '@inox-tools/inline-mod@2.3.0':
+    resolution: {integrity: sha512-Tc8DUNzE92lE4TZXpWBwCo5m3NYZ6L6Zdk5TWZNzTWGBxlGO+p3QymqKMvisu1uhIdD9ctdqL6vDlUUD2imoPg==}
+    peerDependencies:
+      vite: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      vite:
+        optional: true
+
+  '@inox-tools/utils@0.7.0':
+    resolution: {integrity: sha512-mwvDYG21P7uy8JmFTXV5xGocFi2hOx41uai49Sf83HX0bXCYknOyEoouSYRzvoiKP21csRtIFywGwxEjG+TMQg==}
+
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
   '@oslojs/encoding@1.1.0':
     resolution: {integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==}
+
+  '@qwikdev/astro@0.8.2':
+    resolution: {integrity: sha512-jour1tIwuhzcQBdsQyIxUQXfQUVJAHptH7AoTJkWyZk8x4hbYIj2wNYuNoxiGZaI+j9r1lvoZfsT3zQivljL8w==}
+    peerDependencies:
+      '@builder.io/qwik': '>=1.14.1'
 
   '@rollup/pluginutils@5.3.0':
     resolution: {integrity: sha512-5EdhGZtnu3V88ces7s53hhfK5KSASnJZv8Lulpc04cWO3REESroJXg73DFsOmgbU2BhwV0E20bu2IDZb3VKW4Q==}
@@ -561,6 +596,15 @@ packages:
   array-iterate@2.0.1:
     resolution: {integrity: sha512-I1jXZMjAgCMmxT4qxXfPXa6SthSoE8h6gkSI9BGGNv8mP8G/v0blc+qFnZu6K42vTOiuME596QaLO0TP3Lk0xg==}
 
+  ast-types@0.16.1:
+    resolution: {integrity: sha512-6t10qk83GOG8p0vKmaCr8eiilZwO171AvbROMtvvNiwrTly62t+7XkA8RdIIVbpMhCASAsxgAzdRSwh6nw/5Dg==}
+    engines: {node: '>=4'}
+
+  astro-integration-kit@0.18.0:
+    resolution: {integrity: sha512-Z0QW5IQjosuKQDEGYYkvUX6EhEtrmE4/oViqWz23QveV8U7AuyFsTdg00WRNPevWZl/5a4lLUeDpv4bCRynRRg==}
+    peerDependencies:
+      astro: ^4.12.0 || ^5.0.0
+
   astro@5.16.2:
     resolution: {integrity: sha512-NFXqhB1UgBvleF5rLZ7a31Qzprf1lSch+k8o2XTvsw1d97gxGrjVVeWa8AnZUFtirz84YPW6+5NbLVNzS2y+uQ==}
     engines: {node: 18.20.8 || ^20.3.0 || >=22.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
@@ -673,6 +717,9 @@ packages:
     resolution: {integrity: sha512-0LrrStPOdJj+SPCCrGhzryycLjwcgUSHBtxNA8aIDxf0GLsRh1cKYhB00Gd1lDOS4yGH69+SNn13+TWbVHETFQ==}
     engines: {node: ^10 || ^12.20.0 || ^14.13.0 || >=15.0.0, npm: '>=7.0.0'}
 
+  csstype@3.2.3:
+    resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
     engines: {node: '>=6.0'}
@@ -761,6 +808,11 @@ packages:
   escape-string-regexp@5.0.0:
     resolution: {integrity: sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw==}
     engines: {node: '>=12'}
+
+  esprima@4.0.1:
+    resolution: {integrity: sha512-eGuFFw7Upda+g4p+QHvnW0RyTX/SVeJBDM/gCtMARO0cLuT2HcEKnTPvhjV6aGeqrCB/sbNop0Kszm0jsaWU4A==}
+    engines: {node: '>=4'}
+    hasBin: true
 
   estree-walker@2.0.2:
     resolution: {integrity: sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w==}
@@ -885,6 +937,9 @@ packages:
   kleur@3.0.3:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
+
+  launch-editor@2.12.0:
+    resolution: {integrity: sha512-giOHXoOtifjdHqUamwKq6c49GzBdLjvxrd2D+Q4V6uOHopJv7p9VJxikDsQ/CBXZbEITgUqSVHXLTG3VhPP1Dg==}
 
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
@@ -1098,6 +1153,9 @@ packages:
   parse5@7.3.0:
     resolution: {integrity: sha512-IInvU7fabl34qmi9gY8XOVxhYyMyuH2xUNpb2q8/Y+7552KlejkRvqvD19nMoUW/uQGGbqNpA6Tufu5FL5BZgw==}
 
+  pathe@1.1.2:
+    resolution: {integrity: sha512-whLdWMYL2TwI08hn8/ZqAbrVemu0LNaNNJZX73O6qaIdCTfXutsLhMkjdENX0qhsQ9uIimo4/aQOmXkoon2nDQ==}
+
   piccolore@0.1.3:
     resolution: {integrity: sha512-o8bTeDWjE086iwKrROaDf31K0qC/BENdm15/uH9usSC/uZjJOKb2YGiVHfLY4GhwsERiPI1jmwI2XrA7ACOxVw==}
 
@@ -1136,6 +1194,10 @@ packages:
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
+
+  recast@0.23.11:
+    resolution: {integrity: sha512-YTUo+Flmw4ZXiWfQKGcwwc11KnoRAYgzAE2E7mXKCjSviTKShtxBsN6YUUBB2gtaBzKzeKunxhUwNHQuRryhWA==}
+    engines: {node: '>= 4'}
 
   regex-recursion@6.0.2:
     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
@@ -1206,6 +1268,10 @@ packages:
     resolution: {integrity: sha512-Ou9I5Ft9WNcCbXrU9cMgPBcCK8LiwLqcbywW3t4oDV37n1pzpuNLsYiAV8eODnjbtQlSDwZ2cUEeQz4E54Hltg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
 
+  shell-quote@1.8.3:
+    resolution: {integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==}
+    engines: {node: '>= 0.4'}
+
   shiki@3.17.0:
     resolution: {integrity: sha512-lUZfWsyW7czITYTdo/Tb6ZM4VfyXlzmKYBQBjTz+pBzPPkP08RgIt00Ls1Z50Cl3SfwJsue6WbJeF3UgqLVI9Q==}
 
@@ -1218,6 +1284,10 @@ packages:
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
+    engines: {node: '>=0.10.0'}
+
+  source-map@0.6.1:
+    resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
 
   space-separated-tokens@2.0.2:
@@ -1249,6 +1319,9 @@ packages:
 
   tiny-inflate@1.0.3:
     resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
+
+  tiny-invariant@1.3.3:
+    resolution: {integrity: sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==}
 
   tinyexec@1.0.2:
     resolution: {integrity: sha512-W/KYk+NFhkmsYpuHq5JykngiOCnxeVL8v8dFnqxSD8qEEdRfXk1SDM6JzNqcERbcGYj9tMrDQBYV9cjgnunFIg==}
@@ -1568,6 +1641,13 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
+  '@builder.io/qwik@1.17.2(vite@6.4.1(@types/node@24.10.1))':
+    dependencies:
+      csstype: 3.2.3
+      launch-editor: 2.12.0
+      rollup: 4.53.3
+      vite: 6.4.1(@types/node@24.10.1)
+
   '@capsizecss/unpack@3.0.1':
     dependencies:
       fontkit: 2.0.4
@@ -1752,9 +1832,41 @@ snapshots:
   '@img/sharp-win32-x64@0.34.5':
     optional: true
 
+  '@inox-tools/aik-mod@0.11.0(astro-integration-kit@0.18.0(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3)))(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3))(vite@6.4.1(@types/node@24.10.1))':
+    dependencies:
+      '@inox-tools/inline-mod': 2.3.0(vite@6.4.1(@types/node@24.10.1))
+      astro: 5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3)
+      astro-integration-kit: 0.18.0(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3))
+      debug: 4.4.3
+    transitivePeerDependencies:
+      - supports-color
+      - vite
+
+  '@inox-tools/inline-mod@2.3.0(vite@6.4.1(@types/node@24.10.1))':
+    dependencies:
+      '@inox-tools/utils': 0.7.0
+      debug: 4.4.3
+      typescript: 5.9.3
+    optionalDependencies:
+      vite: 6.4.1(@types/node@24.10.1)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@inox-tools/utils@0.7.0': {}
+
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
   '@oslojs/encoding@1.1.0': {}
+
+  '@qwikdev/astro@0.8.2(@builder.io/qwik@1.17.2(vite@6.4.1(@types/node@24.10.1)))(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3))(vite@6.4.1(@types/node@24.10.1))':
+    dependencies:
+      '@builder.io/qwik': 1.17.2(vite@6.4.1(@types/node@24.10.1))
+      '@inox-tools/aik-mod': 0.11.0(astro-integration-kit@0.18.0(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3)))(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3))(vite@6.4.1(@types/node@24.10.1))
+      astro-integration-kit: 0.18.0(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3))
+    transitivePeerDependencies:
+      - astro
+      - supports-color
+      - vite
 
   '@rollup/pluginutils@5.3.0(rollup@4.53.3)':
     dependencies:
@@ -1921,6 +2033,16 @@ snapshots:
   aria-query@5.3.2: {}
 
   array-iterate@2.0.1: {}
+
+  ast-types@0.16.1:
+    dependencies:
+      tslib: 2.8.1
+
+  astro-integration-kit@0.18.0(astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3)):
+    dependencies:
+      astro: 5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3)
+      pathe: 1.1.2
+      recast: 0.23.11
 
   astro@5.16.2(@types/node@24.10.1)(rollup@4.53.3)(typescript@5.9.3):
     dependencies:
@@ -2113,6 +2235,8 @@ snapshots:
     dependencies:
       css-tree: 2.2.1
 
+  csstype@3.2.3: {}
+
   debug@4.4.3:
     dependencies:
       ms: 2.1.3
@@ -2206,6 +2330,8 @@ snapshots:
       '@esbuild/win32-x64': 0.25.12
 
   escape-string-regexp@5.0.0: {}
+
+  esprima@4.0.1: {}
 
   estree-walker@2.0.2: {}
 
@@ -2377,6 +2503,11 @@ snapshots:
       argparse: 2.0.1
 
   kleur@3.0.3: {}
+
+  launch-editor@2.12.0:
+    dependencies:
+      picocolors: 1.1.1
+      shell-quote: 1.8.3
 
   longest-streak@3.1.0: {}
 
@@ -2775,6 +2906,8 @@ snapshots:
     dependencies:
       entities: 6.0.1
 
+  pathe@1.1.2: {}
+
   piccolore@0.1.3: {}
 
   picocolors@1.1.1: {}
@@ -2803,6 +2936,14 @@ snapshots:
   radix3@1.1.2: {}
 
   readdirp@4.1.2: {}
+
+  recast@0.23.11:
+    dependencies:
+      ast-types: 0.16.1
+      esprima: 4.0.1
+      source-map: 0.6.1
+      tiny-invariant: 1.3.3
+      tslib: 2.8.1
 
   regex-recursion@6.0.2:
     dependencies:
@@ -2971,6 +3112,8 @@ snapshots:
       '@img/sharp-win32-x64': 0.34.5
     optional: true
 
+  shell-quote@1.8.3: {}
+
   shiki@3.17.0:
     dependencies:
       '@shikijs/core': 3.17.0
@@ -2987,6 +3130,8 @@ snapshots:
   smol-toml@1.5.2: {}
 
   source-map-js@1.2.1: {}
+
+  source-map@0.6.1: {}
 
   space-separated-tokens@2.0.2: {}
 
@@ -3026,6 +3171,8 @@ snapshots:
       sax: 1.4.3
 
   tiny-inflate@1.0.3: {}
+
+  tiny-invariant@1.3.3: {}
 
   tinyexec@1.0.2: {}
 
