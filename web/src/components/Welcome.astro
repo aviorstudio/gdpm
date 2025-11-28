@@ -1,6 +1,7 @@
 ---
 import astroLogo from '../assets/astro.svg';
 import background from '../assets/background.svg';
+import { QwikTestButton } from './qwik/QwikTestButton';
 ---
 
 <div id="container">
@@ -23,6 +24,11 @@ import background from '../assets/background.svg';
 						></path></svg
 					>
 				</a>
+			</section>
+			<section id="qwik-card" class="box">
+				<h2>Qwik test button</h2>
+				<p>Click below to make sure the Qwik integration is live.</p>
+				<QwikTestButton />
 			</section>
 		</section>
 	</main>
@@ -169,6 +175,38 @@ import background from '../assets/background.svg';
 
 	#news:hover {
 		background: rgba(255, 255, 255, 0.55);
+	}
+
+	#qwik-card {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		margin-top: 24px;
+		max-width: 360px;
+	}
+
+	.qwik-button {
+		padding: 10px 14px;
+		border-radius: 12px;
+		border: 1px solid #cde7ff;
+		background: linear-gradient(120deg, #e9f6ff 0%, #c2e0ff 100%);
+		color: #0f172a;
+		font-weight: 700;
+		font-size: 15px;
+		cursor: pointer;
+		box-shadow: 0 12px 30px rgba(47, 141, 255, 0.25);
+		transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+	}
+
+	.qwik-button:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 16px 36px rgba(47, 141, 255, 0.3);
+		background: linear-gradient(120deg, #e4f3ff 0%, #b5daff 100%);
+	}
+
+	.qwik-button:active {
+		transform: translateY(0);
+		box-shadow: 0 8px 24px rgba(47, 141, 255, 0.22);
 	}
 
 	@media screen and (max-height: 368px) {
