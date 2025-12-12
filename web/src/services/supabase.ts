@@ -13,6 +13,7 @@ type CookieReader = Pick<ServerCookieJar, 'get'>;
 type CookieNames = { storageKey: string; access: string; refresh: string; expires: string };
 type SupabaseEnv = { url: string; anonKey: string; cookies: CookieNames };
 type AuthResult<T> = { data?: T; error?: string };
+type AuthSessionResult = { session?: Session; error?: string; notice?: string };
 
 const CONFIG_ERROR = 'Supabase is not configured. Add PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY.';
 
@@ -41,6 +42,35 @@ const asErrorMessage = (err: unknown, fallback: string) => {
   if (err instanceof Error) return err.message || fallback;
   if (typeof err === 'string') return err || fallback;
   return fallback;
+};
+
+const isEmailNotConfirmed = (err: unknown) =>
+  typeof (err as { message?: string })?.message === 'string' &&
+  /(email\s+not\s+confirmed)/i.test((err as { message?: string }).message || '');
+
+const resendConfirmationEmail = async (client: SupabaseClient, email: string) => {
+  if (!email) return;
+  try {
+    await client.auth.resend({ type: 'signup', email });
+  } catch {
+    // Swallow resend errors; the original auth error is more important to surface.
+  }
+};
+
+const syncProfileFromSession = async (client: SupabaseClient, session: Session) => {
+  const id = session.user?.id;
+  if (!id) return;
+  const email = session.user?.email ?? '';
+  const username =
+    (typeof session.user?.user_metadata === 'object' && session.user.user_metadata?.username) ||
+    email?.split('@')[0] ||
+    'user';
+
+  try {
+    await upsertProfile(client, { id, username, email });
+  } catch {
+    // Don't block sign-in if profile sync fails; it can be retried later.
+  }
 };
 
 const decodeJWTPayload = (token: string) => {
@@ -219,15 +249,20 @@ export const signInWithIdentifier = async (
   cookies: ServerCookieJar,
   identifier: string,
   password: string
-): Promise<{ session?: Session; error?: string }> => {
+): Promise<AuthSessionResult> => {
   const { data: client, error } = getServerClientOrError();
   if (!client) return { error };
   try {
     const email = await resolveLoginEmail(client, identifier);
     const { data, error: signInError } = await client.auth.signInWithPassword({ email, password });
     if (signInError || !data.session) {
+      if (isEmailNotConfirmed(signInError)) {
+        await resendConfirmationEmail(client, email);
+        return { notice: 'Please confirm your email. We just sent a new confirmation link.' };
+      }
       return { error: signInError?.message || 'Sign in failed.' };
     }
+    await syncProfileFromSession(client, data.session);
     writeServerAuthCookies(cookies, data.session);
     return { session: data.session };
   } catch (err) {
@@ -240,7 +275,7 @@ export const signUpWithProfile = async (
   username: string,
   email: string,
   password: string
-): Promise<{ session?: Session; error?: string }> => {
+): Promise<AuthSessionResult> => {
   const { data: client, error } = getServerClientOrError();
   if (!client) return { error };
   try {
@@ -251,11 +286,10 @@ export const signUpWithProfile = async (
     });
     if (signUpError) throw signUpError;
 
-    let session = data.session;
+    const session = data.session;
     if (!session) {
-      const { data: signInData, error: signInError } = await client.auth.signInWithPassword({ email, password });
-      if (signInError) throw signInError;
-      session = signInData.session;
+      await resendConfirmationEmail(client, email);
+      return { notice: 'Check your email to confirm your account before signing in.' };
     }
 
     const userId = session?.user?.id ?? data.user?.id;

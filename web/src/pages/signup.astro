@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import AuthLayout from '../layouts/AuthLayout.astro';
+import AuthInput from '../components/AuthInput.astro';
 import {
   readSessionFromCookies,
   signUpWithProfile,
@@ -25,10 +26,14 @@ if (Astro.request.method === 'POST') {
     status = 'Username, email, and password are required.';
     tone = 'error';
   } else {
-    const { error } = await signUpWithProfile(Astro.cookies, username, email, password);
-    if (error) {
+    const { error, notice } = await signUpWithProfile(Astro.cookies, username, email, password);
+    if (error || notice) {
       status = error;
       tone = 'error';
+      if (notice) {
+        status = notice;
+        tone = 'success';
+      }
     } else {
       return Astro.redirect('/');
     }
@@ -39,36 +44,24 @@ const laterSession = readSessionFromCookies(Astro.cookies);
 if (laterSession) {
   return Astro.redirect('/');
 }
-
-const inputClasses =
-  'w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200';
 ---
 
 <AuthLayout status={status} tone={tone} mode="signup">
-  <label class="grid gap-2 text-sm font-medium text-slate-800">
-    <span>Username</span>
-    <input
-      class={inputClasses}
-      name="username"
-      autocomplete="username"
-      minlength="3"
-      maxlength="32"
-    />
-  </label>
+  <AuthInput
+    label="Username"
+    name="username"
+    autocomplete="username"
+    minlength="3"
+    maxlength="32"
+  />
 
-  <label class="grid gap-2 text-sm font-medium text-slate-800">
-    <span>Email</span>
-    <input class={inputClasses} name="email" type="email" autocomplete="email" />
-  </label>
+  <AuthInput label="Email" name="email" type="email" autocomplete="email" />
 
-  <label class="grid gap-2 text-sm font-medium text-slate-800">
-    <span>Password</span>
-    <input
-      class={inputClasses}
-      name="password"
-      type="password"
-      minlength="6"
-      autocomplete="new-password"
-    />
-  </label>
+  <AuthInput
+    label="Password"
+    name="password"
+    type="password"
+    minlength="6"
+    autocomplete="new-password"
+  />
 </AuthLayout>
