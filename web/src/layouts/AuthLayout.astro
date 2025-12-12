@@ -1,0 +1,38 @@
+---
+import RootLayout from './RootLayout.astro';
+
+interface Props {
+  status?: string;
+  tone?: 'muted' | 'error' | 'success';
+  mode: 'signin' | 'signup';
+}
+
+const { status = '', tone = 'muted', mode } = Astro.props as Props;
+const title = 'Godot Plugin Manager';
+const headline = 'Access your plugin library';
+const lede = 'Secure sign in powered by Supabase so you can store, version, and sync your Godot add-ons without leaving the manager.';
+---
+
+<RootLayout>
+  <section class="page">
+    <div class="frame">
+      <h1 class="title">{title}</h1>
+      <p class="headline">{headline}</p>
+      <p class="lede">{lede}</p>
+
+      <form class="card auth" method="post">
+        <div class="toggle">
+          <a class={{ pill: true, active: mode === 'signin' }} href="/signin">Sign in</a>
+          <a class={{ pill: true, active: mode === 'signup' }} href="/signup">Create account</a>
+        </div>
+
+        <slot />
+
+        <button class="cta" type="submit">{mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+        <p class="status" data-tone={tone}>
+          {status}
+        </p>
+      </form>
+    </div>
+  </section>
+</RootLayout>

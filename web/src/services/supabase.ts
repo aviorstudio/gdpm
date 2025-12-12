@@ -1,27 +1,46 @@
-import { createClient, type Session, type SupabaseClient, type PostgrestError } from '@supabase/supabase-js';
+import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
+export type ServerCookieJar = {
+  get: (name: string) => { value?: string } | undefined;
+  set: (
+    name: string,
+    value: string,
+    options?: { path?: string; maxAge?: number; sameSite?: 'lax' | 'strict' | 'none'; httpOnly?: boolean; secure?: boolean }
+  ) => void;
+};
 
-export type SupabaseBrowserClient = SupabaseClient;
+type CookieReader = Pick<ServerCookieJar, 'get'>;
 
-let cachedClient: SupabaseBrowserClient | null = null;
-let cachedUrl = '';
-let cachedKey = '';
-let authCookieSyncAttached = false;
+type CookieNames = { storageKey: string; access: string; refresh: string; expires: string };
+type SupabaseEnv = { url: string; anonKey: string; cookies: CookieNames };
+type AuthResult<T> = { data?: T; error?: string };
 
-const cookieNamesFromEnv = () => {
+const CONFIG_ERROR = 'Supabase is not configured. Add PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY.';
+
+const supabaseEnv: SupabaseEnv | null = (() => {
+  const url = import.meta.env.PUBLIC_SUPABASE_URL;
+  const anonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+
   try {
-    const url = import.meta.env.PUBLIC_SUPABASE_URL;
-    if (!url) return null;
-    const host = new URL(url).host;
-    const ref = host.split('.')[0];
-    return {
-      storageKey: `sb-${ref}-auth-token`,
-      access: `sb-${ref}-access-token`,
-      refresh: `sb-${ref}-refresh-token`,
-      expires: `sb-${ref}-expires-at`,
+    const hostRef = new URL(url).host.split('.')[0];
+    const cookies = {
+      storageKey: `sb-${hostRef}-auth-token`,
+      access: `sb-${hostRef}-access-token`,
+      refresh: `sb-${hostRef}-refresh-token`,
+      expires: `sb-${hostRef}-expires-at`,
     };
+    return { url, anonKey, cookies };
   } catch {
     return null;
   }
+})();
+
+const nowInSeconds = () => Math.round(Date.now() / 1000);
+
+const asErrorMessage = (err: unknown, fallback: string) => {
+  if (err instanceof Error) return err.message || fallback;
+  if (typeof err === 'string') return err || fallback;
+  return fallback;
 };
 
 const decodeJWTPayload = (token: string) => {
@@ -46,7 +65,7 @@ const sessionFromTokens = (
   refreshToken: string,
   expiresAtRaw?: string | null
 ): Session | null => {
-  const now = Math.round(Date.now() / 1000);
+  const now = nowInSeconds();
   const claims = decodeJWTPayload(accessToken);
   const expiresAt = Number(expiresAtRaw ?? '') || claims?.exp || now + 60 * 60;
   if (expiresAt <= now) return null;
@@ -76,172 +95,178 @@ const sessionFromTokens = (
   };
 };
 
+const createCookieStorage = (names: CookieNames, session: Session) => ({
+  getItem: (key: string) => (key === names.storageKey ? JSON.stringify(session) : null),
+  setItem: () => {},
+  removeItem: () => {},
+  isServer: true,
+});
+
+const createServerClient = (session?: Session): SupabaseClient | null => {
+  if (!supabaseEnv) return null;
+  const { url, anonKey, cookies } = supabaseEnv;
+  return createClient(url, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: Boolean(session),
+      detectSessionInUrl: false,
+      storageKey: cookies.storageKey,
+      storage: session ? createCookieStorage(cookies, session) : undefined,
+    },
+  });
+};
+
+const isSecureCookies = () => (typeof process !== 'undefined' ? process.env.NODE_ENV === 'production' : false);
+
+const setServerCookie = (cookies: ServerCookieJar, name: string, value: string, maxAgeSeconds: number) => {
+  cookies.set(name, value, {
+    path: '/',
+    maxAge: Math.max(0, Math.floor(maxAgeSeconds)),
+    sameSite: 'lax',
+    httpOnly: true,
+    secure: isSecureCookies(),
+  });
+};
+
+const clearServerCookie = (cookies: ServerCookieJar, name: string) => {
+  cookies.set(name, '', { path: '/', maxAge: 0, sameSite: 'lax', httpOnly: true, secure: isSecureCookies() });
+};
+
 export const readSessionFromCookies = (cookies: CookieReader): Session | null => {
-  const names = cookieNamesFromEnv();
-  if (!names) return null;
-  const accessToken = cookies.get(names.access)?.value;
-  const refreshToken = cookies.get(names.refresh)?.value;
-  const expiresAt = cookies.get(names.expires)?.value;
+  if (!supabaseEnv) return null;
+  const { access, refresh, expires } = supabaseEnv.cookies;
+  const accessToken = cookies.get(access)?.value;
+  const refreshToken = cookies.get(refresh)?.value;
+  const expiresAt = cookies.get(expires)?.value;
   if (!accessToken || !refreshToken) return null;
   return sessionFromTokens(accessToken, refreshToken, expiresAt);
 };
 
-const setCookie = (name: string, value: string, maxAgeSeconds: number) => {
-  if (typeof document === 'undefined') return;
-  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
-  const maxAge = Math.max(0, Math.floor(maxAgeSeconds));
-  document.cookie = `${name}=${value}; Path=/; SameSite=Lax; Max-Age=${maxAge}${secure}`;
-};
-
-const clearCookie = (name: string) => setCookie(name, '', 0);
-
-const writeAuthCookies = (session: Session | null) => {
-  const names = cookieNamesFromEnv();
-  if (!names || typeof document === 'undefined') return;
-
-  // Remove the old aggregated cookie if it exists to stay under cookie size limits.
-  clearCookie(names.storageKey);
-
+export const writeServerAuthCookies = (cookies: ServerCookieJar, session: Session | null) => {
+  if (!supabaseEnv) return;
+  const { access, refresh, expires, storageKey } = supabaseEnv.cookies;
   if (!session) {
-    clearCookie(names.access);
-    clearCookie(names.refresh);
-    clearCookie(names.expires);
+    clearServerCookie(cookies, access);
+    clearServerCookie(cookies, refresh);
+    clearServerCookie(cookies, expires);
+    clearServerCookie(cookies, storageKey);
     return;
   }
-
-  const now = Math.round(Date.now() / 1000);
+  const now = nowInSeconds();
   const accessTtl = session.expires_at ? session.expires_at - now : session.expires_in ?? 60 * 60;
-  const refreshTtl = 60 * 60 * 24 * 60; // keep refresh token for ~60 days
+  const refreshTtl = 60 * 60 * 24 * 60;
   const expiresAt = session.expires_at ?? now + accessTtl;
 
-  setCookie(names.access, session.access_token, accessTtl);
+  setServerCookie(cookies, access, session.access_token, accessTtl);
   if (session.refresh_token) {
-    setCookie(names.refresh, session.refresh_token, refreshTtl);
+    setServerCookie(cookies, refresh, session.refresh_token, refreshTtl);
   }
-  setCookie(names.expires, String(expiresAt), refreshTtl);
-};
-
-const attachAuthCookieSync = (client: SupabaseBrowserClient) => {
-  if (authCookieSyncAttached || typeof window === 'undefined') return;
-  authCookieSyncAttached = true;
-
-  client.auth.getSession().then(({ data }) => {
-    writeAuthCookies(data.session ?? null);
-  });
-
-  client.auth.onAuthStateChange((_event, session) => {
-    writeAuthCookies(session ?? null);
-  });
-};
-
-export const getSupabaseBrowserClient = (url: string, anonKey: string): SupabaseBrowserClient => {
-  if (!cachedClient || cachedUrl !== url || cachedKey !== anonKey) {
-    cachedUrl = url;
-    cachedKey = anonKey;
-    cachedClient = createClient(url, anonKey);
-    authCookieSyncAttached = false;
-  }
-  attachAuthCookieSync(cachedClient);
-  return cachedClient;
-};
-
-export const getClientFromEnv = (): { client: SupabaseBrowserClient | null; error?: string } => {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL;
-  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    return {
-      client: null,
-      error: 'Supabase is not configured. Add PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY.',
-    };
-  }
-  return { client: getSupabaseBrowserClient(url, key) };
-};
-
-type CookieReader = {
-  get: (name: string) => { value?: string } | undefined;
-};
-
-export const getServerClientFromCookies = (cookies: CookieReader): SupabaseClient | null => {
-  const names = cookieNamesFromEnv();
-  if (!names) return null;
-  const url = import.meta.env.PUBLIC_SUPABASE_URL;
-  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-
-  const accessToken = cookies.get(names.access)?.value;
-  const refreshToken = cookies.get(names.refresh)?.value;
-  const expiresAt = cookies.get(names.expires)?.value;
-  if (!accessToken || !refreshToken) return null;
-
-  const session = sessionFromTokens(accessToken, refreshToken, expiresAt);
-  if (!session) return null;
-
-  const storage = {
-    getItem: (keyName: string) => {
-      if (keyName !== names.storageKey) return null;
-      return JSON.stringify(session);
-    },
-    setItem: () => {},
-    removeItem: () => {},
-    isServer: true,
-  };
-
-  return createClient(url, key, {
-    auth: {
-      storageKey: names.storageKey,
-      storage,
-      autoRefreshToken: false,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
-  });
+  setServerCookie(cookies, expires, String(expiresAt), refreshTtl);
 };
 
 export const getServerSession = async (cookies: CookieReader) => {
-  const client = getServerClientFromCookies(cookies);
-  if (!client) return { client: null, session: null };
+  if (!supabaseEnv) return { client: null, session: null, error: CONFIG_ERROR };
+
+  const session = readSessionFromCookies(cookies);
+  if (!session) return { client: null, session: null };
+
+  const client = createServerClient(session);
+  if (!client) return { client: null, session: null, error: CONFIG_ERROR };
+
   const { data, error } = await client.auth.getSession();
-  if (error) {
-    return { client, session: null, error };
-  }
-  // If tokens are expired, getSession returns the cached value. Validate exp again.
-  const session = data.session;
-  if (session?.expires_at && session.expires_at <= Math.round(Date.now() / 1000)) {
+  if (error) return { client, session: null, error };
+  const liveSession = data.session;
+  if (liveSession?.expires_at && liveSession.expires_at <= nowInSeconds()) {
     return { client, session: null };
   }
-  return { client, session: session ?? null };
+  return { client, session: liveSession ?? null };
 };
 
-export const resolveEmailFromUsername = async (
-  client: SupabaseBrowserClient,
-  username: string
-): Promise<{ email?: string; error: PostgrestError | null }> => {
+const upsertProfile = async (
+  client: SupabaseClient,
+  payload: { id: string; username: string; email: string }
+) => {
+  const { error } = await client.from('profiles').upsert(payload);
+  if (error) throw new Error(error.message || 'Could not save profile.');
+};
+
+const resolveLoginEmail = async (client: SupabaseClient, identifier: string) => {
+  if (identifier.includes('@')) return identifier;
   const { data, error } = await client
     .from('profiles')
     .select('email')
-    .eq('username', username)
+    .eq('username', identifier)
     .limit(1)
     .maybeSingle();
-  return { email: (data?.email as string | undefined) ?? undefined, error };
+  if (error) {
+    throw new Error(
+      error.code === '42P01'
+        ? 'Add a "profiles" table with username + email and a policy to select by username, or sign in with your email.'
+        : error.message || 'Could not resolve username.'
+    );
+  }
+  if (!data?.email) throw new Error('No account found for that username.');
+  return data.email as string;
 };
 
-export const getProfileById = async (
-  client: SupabaseBrowserClient,
-  id: string
-): Promise<{ exists: boolean; error: PostgrestError | null }> => {
-  const { data, error } = await client
-    .from('profiles')
-    .select('id')
-    .eq('id', id)
-    .limit(1)
-    .maybeSingle();
-  return { exists: !!data?.id, error };
+const getServerClientOrError = (): AuthResult<SupabaseClient> => {
+  const client = createServerClient();
+  if (!client) return { error: CONFIG_ERROR };
+  return { data: client };
 };
 
-export const upsertProfile = async (
-  client: SupabaseBrowserClient,
-  payload: { id: string; username: string; email: string }
-): Promise<{ error: PostgrestError | null }> => {
-  const { error } = await client.from('profiles').upsert(payload);
-  return { error };
+export const signInWithIdentifier = async (
+  cookies: ServerCookieJar,
+  identifier: string,
+  password: string
+): Promise<{ session?: Session; error?: string }> => {
+  const { data: client, error } = getServerClientOrError();
+  if (!client) return { error };
+  try {
+    const email = await resolveLoginEmail(client, identifier);
+    const { data, error: signInError } = await client.auth.signInWithPassword({ email, password });
+    if (signInError || !data.session) {
+      return { error: signInError?.message || 'Sign in failed.' };
+    }
+    writeServerAuthCookies(cookies, data.session);
+    return { session: data.session };
+  } catch (err) {
+    return { error: asErrorMessage(err, 'Sign in failed.') };
+  }
+};
+
+export const signUpWithProfile = async (
+  cookies: ServerCookieJar,
+  username: string,
+  email: string,
+  password: string
+): Promise<{ session?: Session; error?: string }> => {
+  const { data: client, error } = getServerClientOrError();
+  if (!client) return { error };
+  try {
+    const { data, error: signUpError } = await client.auth.signUp({
+      email,
+      password,
+      options: { data: { username } },
+    });
+    if (signUpError) throw signUpError;
+
+    let session = data.session;
+    if (!session) {
+      const { data: signInData, error: signInError } = await client.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
+      session = signInData.session;
+    }
+
+    const userId = session?.user?.id ?? data.user?.id;
+    if (!session || !userId) {
+      throw new Error('Account created but no session returned.');
+    }
+
+    await upsertProfile(client, { id: userId, username, email });
+    writeServerAuthCookies(cookies, session);
+    return { session };
+  } catch (err) {
+    return { error: asErrorMessage(err, 'Account creation failed.') };
+  }
 };

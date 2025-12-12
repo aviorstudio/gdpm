@@ -1,33 +1,53 @@
 ---
 export const prerender = false;
 
-import Layout from '../layouts/Layout.astro';
-import SupabaseAuth from '../components/SupabaseAuth/index.astro';
-import { getServerSession, readSessionFromCookies } from '../services/supabase';
+import AuthLayout from '../layouts/AuthLayout.astro';
+import {
+	readSessionFromCookies,
+	signInWithIdentifier,
+} from '../services/supabase';
 
 const earlySession = readSessionFromCookies(Astro.cookies);
 if (earlySession) {
 	return Astro.redirect('/');
 }
 
-const { session } = await getServerSession(Astro.cookies);
-if (session) {
+let status = '';
+let tone: 'muted' | 'error' | 'success' = 'muted';
+
+if (Astro.request.method === 'POST') {
+	const formData = await Astro.request.formData();
+	const identifier = String(formData.get('identifier') ?? '').trim();
+	const password = String(formData.get('password') ?? '').trim();
+
+	if (!identifier || !password) {
+		status = 'Email or username and password are required.';
+		tone = 'error';
+	} else {
+		const { error } = await signInWithIdentifier(Astro.cookies, identifier, password);
+		if (error) {
+			status = error;
+			tone = 'error';
+		} else {
+			return Astro.redirect('/');
+		}
+	}
+}
+
+const laterSession = readSessionFromCookies(Astro.cookies);
+if (laterSession) {
 	return Astro.redirect('/');
 }
 ---
 
-<Layout>
-	<section class="page">
-		<div class="frame">
-			<h1 class="title">Godot Plugin Manager</h1>
-			<p class="headline">Access your plugin library</p>
-	<p class="lede">
-		Secure sign in powered by Supabase so you can store, version, and sync your Godot add-ons
-		without leaving the manager.
-	</p>
+<AuthLayout status={status} tone={tone} mode="signin">
+	<label class="field">
+		<span>Email or username</span>
+		<input name="identifier" autocomplete="username" />
+	</label>
 
-	<SupabaseAuth />
-</div>
-</section>
-
-</Layout>
+	<label class="field">
+		<span>Password</span>
+		<input name="password" type="password" autocomplete="current-password" />
+	</label>
+</AuthLayout>

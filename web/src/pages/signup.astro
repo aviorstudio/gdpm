@@ -1,0 +1,59 @@
+---
+export const prerender = false;
+
+import AuthLayout from '../layouts/AuthLayout.astro';
+import {
+  readSessionFromCookies,
+  signUpWithProfile,
+} from '../services/supabase';
+
+const earlySession = readSessionFromCookies(Astro.cookies);
+if (earlySession) {
+  return Astro.redirect('/');
+}
+
+let status = '';
+let tone: 'muted' | 'error' | 'success' = 'muted';
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const username = String(formData.get('username') ?? '').trim();
+  const email = String(formData.get('email') ?? '').trim();
+  const password = String(formData.get('password') ?? '').trim();
+
+  if (!username || !email || !password) {
+    status = 'Username, email, and password are required.';
+    tone = 'error';
+  } else {
+    const { error } = await signUpWithProfile(Astro.cookies, username, email, password);
+    if (error) {
+      status = error;
+      tone = 'error';
+    } else {
+      return Astro.redirect('/');
+    }
+  }
+}
+
+const laterSession = readSessionFromCookies(Astro.cookies);
+if (laterSession) {
+  return Astro.redirect('/');
+}
+---
+
+<AuthLayout status={status} tone={tone} mode="signup">
+  <label class="field">
+    <span>Username</span>
+    <input name="username" autocomplete="username" minlength="3" maxlength="32" />
+  </label>
+
+  <label class="field">
+    <span>Email</span>
+    <input name="email" type="email" autocomplete="email" />
+  </label>
+
+  <label class="field">
+    <span>Password</span>
+    <input name="password" type="password" minlength="6" autocomplete="new-password" />
+  </label>
+</AuthLayout>

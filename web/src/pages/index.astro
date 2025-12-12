@@ -1,8 +1,7 @@
 ---
 export const prerender = false;
 
-import Layout from '../layouts/Layout.astro';
-import { SignOutButton } from '../components/qwik/signOutButton/SignOutButton';
+import RootLayout from '../layouts/RootLayout.astro';
 import { getServerSession, readSessionFromCookies } from '../services/supabase';
 
 const earlySession = readSessionFromCookies(Astro.cookies);
@@ -19,7 +18,7 @@ const email = session.user?.email ?? 'Signed in';
 
 ---
 
-<Layout>
+<RootLayout>
 	<section class="page">
 		<div class="frame">
 			<h1 class="title">Godot Plugin Manager</h1>
@@ -37,8 +36,10 @@ const email = session.user?.email ?? 'Signed in';
 					Keep your plugins in sync across projects. Use the sign-in page if you need to start a new
 					session.
 				</p>
-				<SignOutButton qwik:visible />
+				<form class="main-actions" method="post" action="/signout">
+					<button class="ghost" type="submit">Sign out</button>
+				</form>
 			</div>
 		</div>
 	</section>
-</Layout>
+</RootLayout>
