@@ -38,16 +38,24 @@ const laterSession = readSessionFromCookies(Astro.cookies);
 if (laterSession) {
 	return Astro.redirect('/');
 }
+
+const inputClasses =
+	'w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200';
 ---
 
 <AuthLayout status={status} tone={tone} mode="signin">
-	<label class="field">
+	<label class="grid gap-2 text-sm font-medium text-slate-800">
 		<span>Email or username</span>
-		<input name="identifier" autocomplete="username" />
+		<input class={inputClasses} name="identifier" autocomplete="username" />
 	</label>
 
-	<label class="field">
+	<label class="grid gap-2 text-sm font-medium text-slate-800">
 		<span>Password</span>
-		<input name="password" type="password" autocomplete="current-password" />
+		<input
+			class={inputClasses}
+			name="password"
+			type="password"
+			autocomplete="current-password"
+		/>
 	</label>
 </AuthLayout>
