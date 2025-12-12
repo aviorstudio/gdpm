@@ -1,0 +1,20 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SupabaseAuth from '../components/SupabaseAuth/index.astro';
+---
+
+<Layout>
+	<section class="page">
+		<div class="frame">
+			<h1 class="title">Godot Plugin Manager</h1>
+			<p class="headline">Access your plugin library</p>
+			<p class="lede">
+				Secure sign in powered by Supabase so you can store, version, and sync your Godot add-ons
+				without leaving the manager.
+			</p>
+
+			<SupabaseAuth />
+		</div>
+	</section>
+
+</Layout>

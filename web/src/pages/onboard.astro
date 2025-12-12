@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { OnboardForm } from '../components/qwik/onboardForm/OnboardForm';
+---
+
+<Layout>
+	<section class="page">
+		<div class="frame">
+			<h1 class="title">Finish setup</h1>
+			<p class="headline">Add your username</p>
+			<p class="lede">
+				We found your account but still need a username to link your profile for the Godot Plugin
+				Manager.
+			</p>
+
+			<OnboardForm qwik:visible />
+		</div>
+	</section>
+</Layout>
