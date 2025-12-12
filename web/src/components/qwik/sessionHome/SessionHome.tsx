@@ -87,7 +87,10 @@ export const SessionHome = component$(() => {
     state.message = 'Return to /signin to sign in again.';
     state.tone = 'success';
     state.hasSession = false;
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (typeof window !== 'undefined') {
+      window.location.assign('/signin');
+    }
   });
 
   return (

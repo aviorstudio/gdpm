@@ -1,6 +1,16 @@
 ---
+export const prerender = false;
+
 import Layout from '../layouts/Layout.astro';
 import SupabaseAuth from '../components/SupabaseAuth/index.astro';
+import { DebugNow } from '../components/qwik/debugNow/DebugNow';
+import { getServerSession, getProfileById } from '../services/supabase';
+
+const { client, session } = await getServerSession(Astro.cookies);
+if (client && session) {
+	const { exists } = await getProfileById(client, session.user.id);
+	Astro.redirect(exists ? '/' : '/onboard');
+}
 ---
 
 <Layout>
@@ -14,6 +24,7 @@ import SupabaseAuth from '../components/SupabaseAuth/index.astro';
 			</p>
 
 			<SupabaseAuth />
+			<DebugNow qwik:visible />
 		</div>
 	</section>
 

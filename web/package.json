@@ -9,6 +9,7 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/vercel": "^9.0.2",
     "@builder.io/qwik": "^1.17.2",
     "@qwikdev/astro": "^0.8.2",
     "@supabase/supabase-js": "^2.87.1",
