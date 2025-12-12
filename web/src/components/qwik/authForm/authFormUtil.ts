@@ -1,7 +1,6 @@
 import type { SupabaseBrowserClient } from '../../../services/supabase';
 import {
   getClientFromEnv,
-  getProfileById,
   resolveEmailFromUsername,
   upsertProfile,
 } from '../../../services/supabase';
@@ -29,14 +28,6 @@ const resolveLoginEmail = async (client: SupabaseBrowserClient, identifier: stri
   }
   if (!email) throw new Error('No account found for that username.');
   return email;
-};
-
-export const profileExists = async (client: SupabaseBrowserClient, userId: string) => {
-  const { exists, error } = await getProfileById(client, userId);
-  if (error && error.code !== 'PGRST116') {
-    throw error;
-  }
-  return exists;
 };
 
 const upsertProfileForUser = async (
@@ -69,8 +60,7 @@ export const runSignIn = async (
   if (error) throw error;
   const sessionUser = data.session?.user;
   if (!sessionUser) throw new Error('Signed in, but no session returned. Check email confirmation settings.');
-  const exists = await profileExists(client, sessionUser.id);
-  return { redirect: exists ? '/' : '/onboard' };
+  return { redirect: '/' };
 };
 
 export const runSignUp = async (
@@ -78,7 +68,7 @@ export const runSignUp = async (
   username: string,
   password: string,
   setStatus: (text: string, tone: Tone) => void
-): Promise<{ redirect?: string; needsConfirmation?: boolean }> => {
+): Promise<{ redirect?: string }> => {
   const client = getClientOrStatus(setStatus);
   if (!client) return {};
   const { error, data } = await client.auth.signUp({
@@ -87,9 +77,22 @@ export const runSignUp = async (
     options: { data: { username } },
   });
   if (error) throw error;
-  if (data.session?.user) {
-    await upsertProfileForUser(client, { id: data.session.user.id, username, email });
-    return { redirect: '/' };
+  let session = data.session;
+
+  if (!session) {
+    const { data: signInData, error: signInError } = await client.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signInError) throw signInError;
+    session = signInData.session;
   }
-  return { needsConfirmation: true };
+
+  const userId = session?.user?.id ?? data.user?.id;
+  if (!session || !userId) {
+    throw new Error('Account created but no session returned.');
+  }
+
+  await upsertProfileForUser(client, { id: userId, username, email });
+  return { redirect: '/' };
 };

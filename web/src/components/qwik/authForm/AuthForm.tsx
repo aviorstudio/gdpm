@@ -28,6 +28,7 @@ export const AuthForm = component$(() => {
         console.info('[auth] existing session found for', session.user.email);
         state.status = `Signed in as ${session.user.email}`;
         state.tone = 'success';
+        setTimeout(() => window.location.assign('/'), 150);
       } else {
         console.info('[auth] no active session on load');
       }
@@ -60,7 +61,7 @@ export const AuthForm = component$(() => {
           state.tone = tone;
         });
         const redirect = result.redirect || '/';
-        state.status = redirect === '/onboard' ? 'Signed in. Finish setup to continue.' : 'Signed in. Redirecting…';
+        state.status = 'Signed in. Redirecting…';
         state.tone = 'success';
         console.info('[auth] sign-in success; redirecting', redirect);
         setTimeout(() => window.location.assign(redirect), 200);

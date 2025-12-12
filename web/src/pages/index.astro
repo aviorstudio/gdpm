@@ -2,20 +2,20 @@
 export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
-import { SessionHome } from '../components/qwik/sessionHome/SessionHome';
-import { getServerSession, getProfileById } from '../services/supabase';
+import { SignOutButton } from '../components/qwik/signOutButton/SignOutButton';
+import { getServerSession, readSessionFromCookies } from '../services/supabase';
 
-const { client, session } = await getServerSession(Astro.cookies);
+const earlySession = readSessionFromCookies(Astro.cookies);
+if (!earlySession) {
+	return Astro.redirect('/signin');
+}
+
+const { session } = await getServerSession(Astro.cookies);
 if (!session) {
-	Astro.redirect('/signin');
+	return Astro.redirect('/signin');
 }
 
-if (client && session) {
-	const { exists } = await getProfileById(client, session.user.id);
-	if (!exists) {
-		Astro.redirect('/onboard');
-	}
-}
+const email = session.user?.email ?? 'Signed in';
 
 ---
 
@@ -28,7 +28,17 @@ if (client && session) {
 				You’re signed in. Manage, version, and sync your Godot add-ons without leaving the manager.
 			</p>
 
-			<SessionHome qwik:visible />
+			<div class="card main">
+				<div class="main-header">
+					<p class="eyebrow">Account</p>
+					<p class="signed-email">{email}</p>
+				</div>
+				<p class="main-copy">
+					Keep your plugins in sync across projects. Use the sign-in page if you need to start a new
+					session.
+				</p>
+				<SignOutButton qwik:visible />
+			</div>
 		</div>
 	</section>
 </Layout>
