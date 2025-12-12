@@ -1,0 +1,18 @@
+---
+export const prerender = false;
+
+import { getServerSession, writeServerAuthCookies } from '../services/supabase';
+
+if (Astro.request.method === 'POST') {
+  const { client } = await getServerSession(Astro.cookies);
+  try {
+    await client?.auth.signOut();
+  } catch {
+    // Ignore sign-out failures; we'll still clear cookies.
+  }
+  writeServerAuthCookies(Astro.cookies, null);
+  return Astro.redirect('/signin');
+}
+
+return Astro.redirect('/');
+---
