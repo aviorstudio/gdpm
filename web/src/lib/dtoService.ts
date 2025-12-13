@@ -38,6 +38,8 @@ export const packagesDto = {
     client.from('packages').insert(payload).select('*').maybeSingle(),
   listByProfileId: (client: SupabaseClient, profileId: string) =>
     client.from('packages').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
+  listByOrgId: (client: SupabaseClient, orgId: string) =>
+    client.from('packages').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
 };
 
 export const packageVersionsDto = {

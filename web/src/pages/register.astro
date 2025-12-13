@@ -13,6 +13,18 @@ if (hasAuthCookies(Astro.cookies)) {
 }
 
 const normalizeUsername = (value: string) => value.trim().toLowerCase();
+const reservedUsernames = new Set([
+  'signin',
+  'register',
+  'account',
+  'api',
+  '404',
+  'robots.txt',
+  'sitemap.xml',
+  'favicon.ico',
+  'favicon.svg',
+]);
+const isReservedUsername = (value: string) => reservedUsernames.has(value);
 
 let status = '';
 let tone: 'muted' | 'error' | 'success' = 'muted';
@@ -44,6 +56,9 @@ if (Astro.request.method === 'POST') {
       const usernameNormal = normalizeUsername(usernameDisplay);
       if (!usernameNormal) {
         status = 'Username is required.';
+        tone = 'error';
+      } else if (isReservedUsername(usernameNormal)) {
+        status = 'That username is reserved.';
         tone = 'error';
       } else {
         const { data: existingUsername, error: existingUsernameError } = await usernamesDto.getByUsernameNormal(
@@ -123,6 +138,9 @@ if (Astro.request.method === 'POST') {
       const usernameNormal = normalizeUsername(usernameDisplay);
       if (!usernameNormal) {
         status = 'Username is required.';
+        tone = 'error';
+      } else if (isReservedUsername(usernameNormal)) {
+        status = 'That username is reserved.';
         tone = 'error';
       } else {
         const { data: existingUsername, error: existingUsernameError } = await usernamesDto.getByUsernameNormal(
