@@ -4,7 +4,7 @@ export const prerender = false;
 import RootLayout from '../layouts/RootLayout.astro';
 import ModalDialog from '../components/ModalDialog.astro';
 import { getSessionFromCookies } from '../lib/auth';
-import { packageVersionsDto, packagesDto } from '../lib/dtoService';
+import { packageVersionsDto, packagesDto, usernamesDto } from '../lib/dtoService';
 import { supabase } from '../lib/supabase';
 
 const session = await getSessionFromCookies(Astro.cookies);
@@ -14,6 +14,17 @@ if (!session) {
 
 const emailLabel = session.user?.email ?? 'Signed in';
 const profileId = session.user?.id ?? '';
+
+type UsernameRecord = {
+  username_display: string | null;
+};
+
+let accountPath = '/account';
+const { data: usernameRows, error: usernameError } = await usernamesDto.getByProfileId(supabase, profileId);
+if (!usernameError) {
+  const usernameDisplay = (usernameRows as UsernameRecord[] | null)?.[0]?.username_display ?? '';
+  if (usernameDisplay) accountPath = `/${encodeURIComponent(usernameDisplay)}/account`;
+}
 
 let showCreatePackageDialog = Astro.url.searchParams.get('create') === '1';
 let createStatus = '';
@@ -181,7 +192,7 @@ const publishedPackages = packages.map((pkg) => ({
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <a
           class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          href="/account"
+          href={accountPath}
         >
           Account settings
         </a>
