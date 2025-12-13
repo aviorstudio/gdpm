@@ -218,7 +218,7 @@ if (Astro.request.method === 'POST') {
         slot="overlay"
         open
         aria-labelledby="register-confirm-dialog-title"
-        class="fixed inset-0 z-50 m-0 flex w-full max-w-none items-center justify-center border-0 bg-slate-900/40 p-0 px-4"
+        class="fixed inset-0 z-50 m-0 grid h-[100dvh] w-[100vw] place-items-center overflow-y-auto border-0 bg-slate-900/40 p-4 outline-none backdrop-blur-sm"
       >
         <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-xl">
           <h2 id="register-confirm-dialog-title" class="text-lg font-semibold text-slate-900">
