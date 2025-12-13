@@ -3,47 +3,22 @@ export const prerender = false;
 
 import AuthLayout from '../layouts/AuthLayout.astro';
 import AuthInput from '../components/AuthInput.astro';
-import {
-  readSessionFromCookies,
-  signUpWithProfile,
-} from '../services/supabase';
+import { readSessionFromCookies } from '../services/supabase';
 
 const earlySession = readSessionFromCookies(Astro.cookies);
 if (earlySession) {
   return Astro.redirect('/');
 }
 
-let status = '';
-let tone: 'muted' | 'error' | 'success' = 'muted';
-
 if (Astro.request.method === 'POST') {
-  const formData = await Astro.request.formData();
-  const username = String(formData.get('username') ?? '').trim();
-  const email = String(formData.get('email') ?? '').trim();
-  const password = String(formData.get('password') ?? '').trim();
-
-  if (!username || !email || !password) {
-    status = 'Username, email, and password are required.';
-    tone = 'error';
-  } else {
-    const { error, notice } = await signUpWithProfile(Astro.cookies, username, email, password);
-    if (error || notice) {
-      status = error;
-      tone = 'error';
-      if (notice) {
-        status = notice;
-        tone = 'success';
-      }
-    } else {
-      return Astro.redirect('/');
-    }
-  }
+  return new Response(null, { status: 307, headers: { Location: '/api/signup' } });
 }
 
-const laterSession = readSessionFromCookies(Astro.cookies);
-if (laterSession) {
-  return Astro.redirect('/');
-}
+const search = Astro.url.searchParams;
+const status = search.get('status') ?? '';
+const toneParam = search.get('tone');
+const tone: 'muted' | 'error' | 'success' =
+  toneParam === 'error' ? 'error' : toneParam === 'success' ? 'success' : 'muted';
 ---
 
 <AuthLayout status={status} tone={tone} mode="signup">
