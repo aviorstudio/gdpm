@@ -29,5 +29,5 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   const { access_token, refresh_token } = data.session;
   writeAuthCookies(cookies, { accessToken: access_token, refreshToken: refresh_token });
-  return redirect('/dashboard');
+  return redirect('/');
 };

@@ -6,7 +6,7 @@ import AuthInput from '../components/AuthInput.astro';
 import { hasAuthCookies } from '../lib/auth';
 
 if (hasAuthCookies(Astro.cookies)) {
-	return Astro.redirect('/dashboard');
+	return Astro.redirect('/');
 }
 ---
 

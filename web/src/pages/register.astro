@@ -8,7 +8,7 @@ import { profilesDto, usernamesDto } from '../lib/dtoService';
 import { supabase } from '../lib/supabase';
 
 if (hasAuthCookies(Astro.cookies)) {
-  return Astro.redirect('/dashboard');
+  return Astro.redirect('/');
 }
 
 const normalizeUsername = (value: string) => value.trim().toLowerCase();

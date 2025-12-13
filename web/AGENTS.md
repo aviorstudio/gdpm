@@ -6,7 +6,7 @@
 - **Pages**:
   - `/signin` renders a simple POST form for email + password.
   - `/register` collects username + email + password, then confirms email via an 8-digit code modal before creating `profiles` + `usernames` rows.
-  - `/dashboard` validates auth cookies server-side and renders the signed-in view.
+  - `/` validates auth cookies server-side and renders the signed-in view.
 - **Styling/layout**: Global CSS lives in `src/layouts/RootLayout.astro`; auth shell in `src/layouts/AuthLayout.astro`; components are plain and reuse shared classes (`card`, `cta`, etc.).
 - **Build/run**: `pnpm install`, then `pnpm dev` or `pnpm build`. Vite may warn about `vite-plugin-qwik` emitFile; safe to ignore for now.
 
