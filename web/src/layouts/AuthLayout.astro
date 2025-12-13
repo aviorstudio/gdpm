@@ -4,7 +4,7 @@ import RootLayout from './RootLayout.astro';
 interface Props {
   status?: string;
   tone?: 'muted' | 'error' | 'success';
-  mode: 'signin' | 'signup';
+  mode: 'signin' | 'register';
   action?: string;
 }
 
@@ -12,7 +12,7 @@ const { status = '', tone = 'muted', mode, action } = Astro.props as Props;
 const title = 'Godot Plugin Manager';
 const headline = 'Access your plugin library';
 const lede = 'Secure sign in powered by Supabase so you can store, version, and sync your Godot add-ons without leaving the manager.';
-const formAction = action ?? (mode === 'signin' ? '/api/signin' : '/api/signup');
+const formAction = action ?? (mode === 'signin' ? '/api/auth/signin' : '/register');
 ---
 
 <RootLayout>
@@ -39,9 +39,9 @@ const formAction = action ?? (mode === 'signin' ? '/api/signin' : '/api/signup')
 					</a>
 					<a class:list={{
 							'rounded-full px-4 py-2 text-sm font-semibold transition': true,
-							'bg-white text-slate-900 shadow-sm': mode === 'signup',
-							'text-slate-600 hover:text-slate-800': mode !== 'signup',
-						}} href="/signup">
+							'bg-white text-slate-900 shadow-sm': mode === 'register',
+							'text-slate-600 hover:text-slate-800': mode !== 'register',
+						}} href="/register">
 						Create account
 					</a>
 				</div>

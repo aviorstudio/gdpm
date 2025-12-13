@@ -1,9 +1,0 @@
----
-export const prerender = false;
-
-if (Astro.request.method === 'POST') {
-  return new Response(null, { status: 307, headers: { Location: '/api/signout' } });
-}
-
-return Astro.redirect('/');
----

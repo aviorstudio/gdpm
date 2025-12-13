@@ -1,0 +1,275 @@
+---
+export const prerender = false;
+
+import AuthLayout from '../layouts/AuthLayout.astro';
+import AuthInput from '../components/AuthInput.astro';
+import { hasAuthCookies, writeAuthCookies } from '../lib/auth';
+import { profilesDto, usernamesDto } from '../lib/dtoService';
+import { supabase } from '../lib/supabase';
+
+if (hasAuthCookies(Astro.cookies)) {
+  return Astro.redirect('/dashboard');
+}
+
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
+
+let status = '';
+let tone: 'muted' | 'error' | 'success' = 'muted';
+
+let showVerification = false;
+let pendingUsername = '';
+let pendingEmail = '';
+
+let formUsername = '';
+let formEmail = '';
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const step = String(formData.get('step') ?? 'create');
+
+  if (step === 'verify') {
+    pendingUsername = String(formData.get('username') ?? '').trim();
+    pendingEmail = String(formData.get('email') ?? '').trim();
+    formUsername = pendingUsername;
+    formEmail = pendingEmail;
+    showVerification = true;
+
+    const token = String(formData.get('token') ?? '').trim();
+    if (!pendingUsername || !pendingEmail || !token) {
+      status = 'Username, email, and verification code are required.';
+      tone = 'error';
+    } else {
+      const usernameDisplay = pendingUsername;
+      const usernameNormal = normalizeUsername(usernameDisplay);
+      if (!usernameNormal) {
+        status = 'Username is required.';
+        tone = 'error';
+      } else {
+        const { data: existingUsername, error: existingUsernameError } = await usernamesDto.getByUsernameNormal(
+          supabase,
+          usernameNormal
+        );
+        if (existingUsernameError) {
+          status = existingUsernameError.message;
+          tone = 'error';
+        } else if (existingUsername) {
+          status = 'That username is already taken.';
+          tone = 'error';
+        } else {
+          const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+            email: pendingEmail,
+            token,
+            type: 'signup',
+          });
+          if (verifyError) {
+            status = verifyError.message;
+            tone = 'error';
+          } else if (!verifyData.session) {
+            status = 'Verification succeeded but no session returned.';
+            tone = 'error';
+          } else {
+            const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
+              access_token: verifyData.session.access_token,
+              refresh_token: verifyData.session.refresh_token,
+            });
+            const session = setSessionData.session;
+            const userId = session?.user?.id ?? '';
+            if (setSessionError || !session || !userId) {
+              status = setSessionError?.message || 'Invalid session.';
+              tone = 'error';
+            } else {
+              const { error: profileError } = await profilesDto.upsert(supabase, {
+                id: userId,
+                name: usernameDisplay,
+                contact_email: pendingEmail,
+              });
+              if (profileError) {
+                status = profileError.message;
+                tone = 'error';
+              } else {
+                const { error: usernameError } = await usernamesDto.insert(supabase, {
+                  username_display: usernameDisplay,
+                  username_normal: usernameNormal,
+                  profile_id: userId,
+                });
+                if (usernameError) {
+                  status =
+                    usernameError.code === '23505' ? 'That username is already taken.' : usernameError.message;
+                  tone = 'error';
+                } else {
+                  writeAuthCookies(Astro.cookies, {
+                    accessToken: session.access_token,
+                    refreshToken: session.refresh_token,
+                  });
+                  return Astro.redirect('/');
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } else {
+    formUsername = String(formData.get('username') ?? '').trim();
+    formEmail = String(formData.get('email') ?? '').trim();
+    const password = String(formData.get('password') ?? '');
+
+    if (!formUsername || !formEmail || !password) {
+      status = 'Username, email, and password are required.';
+      tone = 'error';
+    } else {
+      const usernameDisplay = formUsername;
+      const usernameNormal = normalizeUsername(usernameDisplay);
+      if (!usernameNormal) {
+        status = 'Username is required.';
+        tone = 'error';
+      } else {
+        const { data: existingUsername, error: existingUsernameError } = await usernamesDto.getByUsernameNormal(
+          supabase,
+          usernameNormal
+        );
+        if (existingUsernameError) {
+          status = existingUsernameError.message;
+          tone = 'error';
+        } else if (existingUsername) {
+          status = 'That username is already taken.';
+          tone = 'error';
+        } else {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: formEmail,
+            password,
+          });
+
+          if (signUpError) {
+            status = signUpError.message;
+            tone = 'error';
+          } else if (signUpData.session) {
+            const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
+              access_token: signUpData.session.access_token,
+              refresh_token: signUpData.session.refresh_token,
+            });
+
+            const session = setSessionData.session;
+            const userId = session?.user?.id ?? '';
+            if (setSessionError || !session || !userId) {
+              status = setSessionError?.message || 'Invalid session.';
+              tone = 'error';
+            } else {
+              const { error: profileError } = await profilesDto.upsert(supabase, {
+                id: userId,
+                name: usernameDisplay,
+                contact_email: formEmail,
+              });
+              if (profileError) {
+                status = profileError.message;
+                tone = 'error';
+              } else {
+                const { error: usernameError } = await usernamesDto.insert(supabase, {
+                  username_display: usernameDisplay,
+                  username_normal: usernameNormal,
+                  profile_id: userId,
+                });
+                if (usernameError) {
+                  status =
+                    usernameError.code === '23505' ? 'That username is already taken.' : usernameError.message;
+                  tone = 'error';
+                } else {
+                  writeAuthCookies(Astro.cookies, {
+                    accessToken: session.access_token,
+                    refreshToken: session.refresh_token,
+                  });
+                  return Astro.redirect('/');
+                }
+              }
+            }
+          } else {
+            status = 'Enter the 8-digit code we emailed you to confirm your account.';
+            tone = 'success';
+            showVerification = true;
+            pendingUsername = formUsername;
+            pendingEmail = formEmail;
+          }
+        }
+      }
+    }
+  }
+}
+---
+
+<AuthLayout mode="register" action="/register" status={status} tone={tone}>
+  <input type="hidden" name="step" value="create" />
+
+  <AuthInput label="Username" name="username" autocomplete="username" minlength="3" maxlength="32" value={formUsername} />
+
+  <AuthInput label="Email" name="email" type="email" autocomplete="email" value={formEmail} />
+
+  <AuthInput
+    label="Password"
+    name="password"
+    type="password"
+    minlength="6"
+    autocomplete="new-password"
+  />
+
+  {
+    showVerification && (
+      <dialog
+        id="register-confirm-dialog"
+        slot="overlay"
+        open
+        aria-labelledby="register-confirm-dialog-title"
+        class="fixed inset-0 z-50 m-0 flex w-full max-w-none items-center justify-center border-0 bg-slate-900/40 p-0 px-4"
+      >
+        <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-xl">
+          <h2 id="register-confirm-dialog-title" class="text-lg font-semibold text-slate-900">
+            Confirm your email
+          </h2>
+          <p class="mt-1 text-sm text-slate-600">
+            Enter the 8-digit verification code we sent to <span class="font-semibold text-slate-900">{pendingEmail}</span>.
+          </p>
+
+          <form method="post" action="/register" class="mt-5 space-y-4">
+            <input type="hidden" name="step" value="verify" />
+            <input type="hidden" name="username" value={pendingUsername} />
+            <input type="hidden" name="email" value={pendingEmail} />
+
+            <AuthInput
+              label="Verification code"
+              name="token"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              placeholder="12345678"
+              minlength="8"
+              maxlength="8"
+              pattern="[0-9]{8}"
+              required
+            />
+
+            {
+              tone === 'error' && status && (
+                <p class="text-sm font-medium text-red-600">
+                  {status}
+                </p>
+              )
+            }
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <a
+                class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                href="/register"
+              >
+                Cancel
+              </a>
+              <button
+                class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+                type="submit"
+              >
+                Confirm
+              </button>
+            </div>
+          </form>
+        </div>
+      </dialog>
+    )
+  }
+</AuthLayout>

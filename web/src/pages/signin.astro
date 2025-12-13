@@ -3,26 +3,15 @@ export const prerender = false;
 
 import AuthLayout from '../layouts/AuthLayout.astro';
 import AuthInput from '../components/AuthInput.astro';
-import { readSessionFromCookies } from '../services/supabase';
+import { hasAuthCookies } from '../lib/auth';
 
-const earlySession = readSessionFromCookies(Astro.cookies);
-if (earlySession) {
-	return Astro.redirect('/');
+if (hasAuthCookies(Astro.cookies)) {
+	return Astro.redirect('/dashboard');
 }
-
-if (Astro.request.method === 'POST') {
-	return new Response(null, { status: 307, headers: { Location: '/api/signin' } });
-}
-
-const search = Astro.url.searchParams;
-const status = search.get('status') ?? '';
-const toneParam = search.get('tone');
-const tone: 'muted' | 'error' | 'success' =
-	toneParam === 'error' ? 'error' : toneParam === 'success' ? 'success' : 'muted';
 ---
 
-<AuthLayout status={status} tone={tone} mode="signin">
-	<AuthInput label="Email or username" name="identifier" autocomplete="username" />
+<AuthLayout mode="signin">
+	<AuthInput label="Email" name="email" type="email" autocomplete="email" />
 
 	<AuthInput
 		label="Password"
