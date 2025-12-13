@@ -45,6 +45,7 @@ const asErrorMessage = (err: unknown, fallback: string) => {
 };
 
 const asTrimmedString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
 
 const isEmailNotConfirmed = (err: unknown) =>
   typeof (err as { message?: string })?.message === 'string' &&
@@ -70,13 +71,13 @@ const resendConfirmationEmail = async (client: SupabaseClient, email: string) =>
 export const getProfileUsername = async (client: SupabaseClient, id: string): Promise<string> => {
   const { data, error } = await client
     .from('usernames')
-    .select('username')
+    .select('username_display')
     .eq('profile_id', id)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) return '';
-  return asTrimmedString((data as { username?: unknown } | null)?.username);
+  return asTrimmedString((data as { username_display?: unknown } | null)?.username_display);
 };
 
 const syncProfileFromSession = async (client: SupabaseClient, session: Session) => {
@@ -248,9 +249,18 @@ const insertUsername = async (
     throw new Error('Username must be linked to exactly one owner (profile or org).');
   }
 
+  const usernameDisplay = payload.username;
+  const usernameNormalized = normalizeUsername(usernameDisplay);
+  if (!usernameDisplay || !usernameNormalized) throw new Error('Username is required.');
+
   const { error } = await client
     .from('usernames')
-    .insert({ username: payload.username, profile_id: profileId || null, org_id: orgId || null });
+    .insert({
+      username_display: usernameDisplay,
+      username_normal: usernameNormalized,
+      profile_id: profileId || null,
+      org_id: orgId || null,
+    });
   if (!error) return;
   if (error.code === '23505') throw new Error('That username is already taken.');
   throw new Error(error.message || 'Could not save username.');
@@ -258,10 +268,11 @@ const insertUsername = async (
 
 const resolveLoginEmail = async (client: SupabaseClient, identifier: string) => {
   if (identifier.includes('@')) return identifier;
+  const normalizedUsername = normalizeUsername(identifier);
   const { data: usernameRow, error: usernameError } = await client
     .from('usernames')
     .select('profile_id')
-    .eq('username', identifier)
+    .eq('username_normal', normalizedUsername)
     .not('profile_id', 'is', null)
     .order('created_at', { ascending: false })
     .limit(1)

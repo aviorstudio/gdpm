@@ -6,7 +6,7 @@
   - `/signin` renders a simple POST form for email/username + password.
   - `/signup` renders a POST form for username/email/password, sends an email verification code, then creates the Supabase user + `profiles` + `usernames` rows after confirmation.
   - `/` renders the signed-in view server-side and includes only the Qwik sign-out button.
-- **Supabase data**: expects a `profiles` table keyed by `id` (FK to `auth.users`) with `name` + `contact_email`, plus a `usernames` table with `username` + `profile_id` (FK to `profiles.id`). Username sign-in resolves email via `usernames` → `profiles`.
+- **Supabase data**: expects a `profiles` table keyed by `id` (FK to `auth.users`) with `name` + `contact_email`, plus a `usernames` table with `username_display` + `username_normal` + `profile_id` (FK to `profiles.id`). Username sign-in resolves email via `usernames` → `profiles`.
 - **Styling/layout**: Global CSS lives in `src/layouts/RootLayout.astro`; auth shell in `src/layouts/AuthLayout.astro`; components are plain and reuse shared classes (`card`, `cta`, etc.).
 - **Build/run**: `pnpm install`, then `pnpm dev` or `pnpm build`. Vite may warn about `vite-plugin-qwik` emitFile; safe to ignore for now.
 
