@@ -25,3 +25,28 @@ export const usernamesDto = {
   getByUsernameNormal: (client: SupabaseClient, usernameNormal: string) =>
     client.from('usernames').select('*').eq('username_normal', usernameNormal).maybeSingle(),
 };
+
+export type PackageInsert = {
+  profile_id?: string | null;
+  org_id?: string | null;
+  name: string;
+  repo: string;
+};
+
+export const packagesDto = {
+  insert: (client: SupabaseClient, payload: PackageInsert) =>
+    client.from('packages').insert(payload).select('*').maybeSingle(),
+  listByProfileId: (client: SupabaseClient, profileId: string) =>
+    client.from('packages').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
+};
+
+export const packageVersionsDto = {
+  insert: (client: SupabaseClient, payload: { package_id: string; version: string; sha: string }) =>
+    client.from('package_versions').insert(payload).select('*').maybeSingle(),
+  listByPackageIds: (client: SupabaseClient, packageIds: string[]) =>
+    client
+      .from('package_versions')
+      .select('*')
+      .in('package_id', packageIds)
+      .order('created_at', { ascending: false }),
+};
