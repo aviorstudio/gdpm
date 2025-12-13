@@ -44,9 +44,19 @@ const asErrorMessage = (err: unknown, fallback: string) => {
   return fallback;
 };
 
+const asTrimmedString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
 const isEmailNotConfirmed = (err: unknown) =>
   typeof (err as { message?: string })?.message === 'string' &&
   /(email\s+not\s+confirmed)/i.test((err as { message?: string }).message || '');
+
+const EMAIL_OTP_TYPES = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'] as const;
+type EmailOtpType = (typeof EMAIL_OTP_TYPES)[number];
+
+const asEmailOtpType = (value: string | null) => {
+  if (!value) return null;
+  return EMAIL_OTP_TYPES.includes(value as EmailOtpType) ? (value as EmailOtpType) : null;
+};
 
 const resendConfirmationEmail = async (client: SupabaseClient, email: string) => {
   if (!email) return;
@@ -57,17 +67,25 @@ const resendConfirmationEmail = async (client: SupabaseClient, email: string) =>
   }
 };
 
+export const getProfileUsername = async (client: SupabaseClient, id: string): Promise<string> => {
+  const { data, error } = await client
+    .from('usernames')
+    .select('username')
+    .eq('profile_id', id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return '';
+  return asTrimmedString((data as { username?: unknown } | null)?.username);
+};
+
 const syncProfileFromSession = async (client: SupabaseClient, session: Session) => {
   const id = session.user?.id;
   if (!id) return;
   const email = session.user?.email ?? '';
-  const username =
-    (typeof session.user?.user_metadata === 'object' && session.user.user_metadata?.username) ||
-    email?.split('@')[0] ||
-    'user';
 
   try {
-    await upsertProfile(client, { id, username, email });
+    await upsertProfile(client, { id, contact_email: email });
   } catch {
     // Don't block sign-in if profile sync fails; it can be retried later.
   }
@@ -214,29 +232,68 @@ export const getServerSession = async (cookies: CookieReader) => {
 
 const upsertProfile = async (
   client: SupabaseClient,
-  payload: { id: string; username: string; email: string }
+  payload: { id: string; name?: string; contact_email: string }
 ) => {
   const { error } = await client.from('profiles').upsert(payload);
   if (error) throw new Error(error.message || 'Could not save profile.');
 };
 
+const insertUsername = async (
+  client: SupabaseClient,
+  payload: { username: string; profile_id?: string | null; org_id?: string | null }
+) => {
+  const profileId = asTrimmedString(payload.profile_id);
+  const orgId = asTrimmedString(payload.org_id);
+  if ((profileId && orgId) || (!profileId && !orgId)) {
+    throw new Error('Username must be linked to exactly one owner (profile or org).');
+  }
+
+  const { error } = await client
+    .from('usernames')
+    .insert({ username: payload.username, profile_id: profileId || null, org_id: orgId || null });
+  if (!error) return;
+  if (error.code === '23505') throw new Error('That username is already taken.');
+  throw new Error(error.message || 'Could not save username.');
+};
+
 const resolveLoginEmail = async (client: SupabaseClient, identifier: string) => {
   if (identifier.includes('@')) return identifier;
-  const { data, error } = await client
-    .from('profiles')
-    .select('email')
+  const { data: usernameRow, error: usernameError } = await client
+    .from('usernames')
+    .select('profile_id')
     .eq('username', identifier)
+    .not('profile_id', 'is', null)
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error) {
+  if (usernameError) {
     throw new Error(
-      error.code === '42P01'
-        ? 'Add a "profiles" table with username + email and a policy to select by username, or sign in with your email.'
-        : error.message || 'Could not resolve username.'
+      usernameError.code === '42P01'
+        ? 'Add a "usernames" table (username + profile_id) and allow selecting by username, or sign in with your email.'
+        : usernameError.message || 'Could not resolve username.'
     );
   }
-  if (!data?.email) throw new Error('No account found for that username.');
-  return data.email as string;
+
+  const profileId = asTrimmedString((usernameRow as { profile_id?: unknown } | null)?.profile_id);
+  if (!profileId) throw new Error('No account found for that username.');
+
+  const { data: profileRow, error: profileError } = await client
+    .from('profiles')
+    .select('contact_email')
+    .eq('id', profileId)
+    .limit(1)
+    .maybeSingle();
+  if (profileError) {
+    throw new Error(
+      profileError.code === '42P01'
+        ? 'Add a "profiles" table (id + contact_email), or sign in with your email.'
+        : profileError.message || 'Could not resolve username.'
+    );
+  }
+
+  const email = asTrimmedString((profileRow as { contact_email?: unknown } | null)?.contact_email);
+  if (!email) throw new Error('No account found for that username.');
+  return email;
 };
 
 const getServerClientOrError = (): AuthResult<SupabaseClient> => {
@@ -282,25 +339,140 @@ export const signUpWithProfile = async (
     const { data, error: signUpError } = await client.auth.signUp({
       email,
       password,
-      options: { data: { username } },
     });
     if (signUpError) throw signUpError;
 
     const session = data.session;
+    const userId = session?.user?.id ?? data.user?.id;
     if (!session) {
-      await resendConfirmationEmail(client, email);
-      return { notice: 'Check your email to confirm your account before signing in.' };
+      return { notice: 'Check your email for the verification code to finish creating your account.' };
     }
 
-    const userId = session?.user?.id ?? data.user?.id;
-    if (!session || !userId) {
+    if (!userId) {
       throw new Error('Account created but no session returned.');
     }
 
-    await upsertProfile(client, { id: userId, username, email });
+    const authedClient = createServerClient(session) ?? client;
+    await upsertProfile(authedClient, { id: userId, name: username, contact_email: email });
+    await insertUsername(authedClient, { profile_id: userId, username });
     writeServerAuthCookies(cookies, session);
     return { session };
   } catch (err) {
     return { error: asErrorMessage(err, 'Account creation failed.') };
+  }
+};
+
+export const confirmSignUpWithCode = async (
+  cookies: ServerCookieJar,
+  username: string,
+  email: string,
+  code: string
+): Promise<AuthSessionResult> => {
+  const { data: client, error } = getServerClientOrError();
+  if (!client) return { error };
+  try {
+    const trimmedEmail = email.trim();
+    const emailsToTry = Array.from(
+      new Set([trimmedEmail, trimmedEmail.toLowerCase()].filter(Boolean))
+    );
+    const trimmed = code.trim();
+    const otpCandidate = (() => {
+      const matches = trimmed.match(/\b\d{6,8}\b/g);
+      if (matches?.length === 1) return matches[0];
+      const digitsOnly = trimmed.replace(/\D/g, '');
+      if (
+        digitsOnly.length >= 6 &&
+        digitsOnly.length <= 8 &&
+        /^[\d\s-]+$/.test(trimmed)
+      ) {
+        return digitsOnly;
+      }
+      return '';
+    })();
+    let session: Session | null = null;
+    let userId = '';
+
+    const tryVerify = async () => {
+      const url = (() => {
+        try {
+          return new URL(trimmed);
+        } catch {
+          return null;
+        }
+      })();
+
+      const typeParam = asEmailOtpType(url?.searchParams.get('type') ?? null);
+      const typesToTry: EmailOtpType[] = typeParam ? [typeParam] : ['signup', 'email', 'magiclink'];
+      const tokenHash = url?.searchParams.get('token_hash') || '';
+      const token = url?.searchParams.get('token') || '';
+      const authCode = url?.searchParams.get('code') || '';
+
+      if (authCode) {
+        const { data, error } = await client.auth.exchangeCodeForSession(authCode);
+        if (error) throw error;
+        session = data.session;
+        userId = session?.user?.id ?? '';
+        return;
+      }
+
+      if (tokenHash) {
+        let lastError: unknown = null;
+        for (const type of typesToTry) {
+          const { data, error } = await client.auth.verifyOtp({ token_hash: tokenHash, type });
+          if (error) {
+            lastError = error;
+            continue;
+          }
+          session = data.session;
+          userId = session?.user?.id ?? data.user?.id ?? '';
+          return;
+        }
+        throw lastError ?? new Error('Verification failed.');
+      }
+
+      const tokenCandidate = token || otpCandidate || trimmed;
+
+      let tokenError: unknown = null;
+      for (const type of typesToTry) {
+        for (const email of emailsToTry) {
+          const { data, error } = await client.auth.verifyOtp({ email, token: tokenCandidate, type });
+          if (error) {
+            tokenError = error;
+            continue;
+          }
+          session = data.session;
+          userId = session?.user?.id ?? data.user?.id ?? '';
+          return;
+        }
+      }
+
+      let tokenHashError: unknown = null;
+      for (const type of typesToTry) {
+        const { data, error } = await client.auth.verifyOtp({ token_hash: tokenCandidate, type });
+        if (error) {
+          tokenHashError = error;
+          continue;
+        }
+        session = data.session;
+        userId = session?.user?.id ?? data.user?.id ?? '';
+        return;
+      }
+      throw tokenError ?? tokenHashError ?? new Error('Verification failed.');
+    };
+
+    await tryVerify();
+    if (!session || !userId) {
+      throw new Error('Verification succeeded but no session returned.');
+    }
+
+    const authedClient = createServerClient(session) ?? client;
+    const resolvedEmail = session.user?.email ?? trimmedEmail;
+    await upsertProfile(authedClient, { id: userId, name: username, contact_email: resolvedEmail });
+    await insertUsername(authedClient, { profile_id: userId, username });
+
+    writeServerAuthCookies(cookies, session);
+    return { session };
+  } catch (err) {
+    return { error: asErrorMessage(err, 'Verification failed.') };
   }
 };

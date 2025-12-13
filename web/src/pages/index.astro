@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import RootLayout from '../layouts/RootLayout.astro';
-import { getServerSession, readSessionFromCookies } from '../services/supabase';
+import { getProfileUsername, getServerSession, readSessionFromCookies } from '../services/supabase';
 
 const earlySession = readSessionFromCookies(Astro.cookies);
 if (!earlySession) {
@@ -15,17 +15,9 @@ if (!session) {
 }
 
 const email = session.user?.email ?? '';
-let username =
-	(typeof session.user?.user_metadata === 'object' && session.user.user_metadata?.username) || '';
-
-if (!username && client && session.user?.id) {
-	const { data } = await client
-		.from('profiles')
-		.select('username')
-		.eq('id', session.user.id)
-		.limit(1)
-		.maybeSingle();
-	username = (data?.username as string | null) ?? '';
+let username = '';
+if (client && session.user?.id) {
+	username = await getProfileUsername(client, session.user.id);
 }
 
 const emailLabel = email || 'Signed in';
