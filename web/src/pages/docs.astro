@@ -2,45 +2,39 @@
 export const prerender = false;
 
 import RootLayout from '../layouts/RootLayout.astro';
-import PageHeader from '../components/PageHeader.astro';
+import Card from '../components/Card.astro';
+import Splash from '../components/Splash.astro';
 ---
 
 <RootLayout>
-	<section class="flex justify-center px-4 py-12 md:py-16">
-		<div class="w-full max-w-5xl space-y-6">
-			<header class="flex flex-col gap-4 text-center sm:text-left md:flex-row md:items-end md:justify-between">
-				<PageHeader title="Docs" subtitle="Notes about GDPM and the person building it." />
-			</header>
+	<Splash title="Docs" subtitle="Notes about GDPM and the person building it." />
 
-			<div class="w-full space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-				<section class="space-y-3">
-					<h2 class="text-base font-semibold text-slate-900">About me</h2>
-					<p class="text-sm text-slate-700">
-						I’m the maintainer of GDPM. I’m building it to make publishing and installing Godot plugins feel
-						simple, predictable, and versioned.
-					</p>
-					<p class="text-sm text-slate-700">
-						This page is intentionally lightweight for now; it’ll grow into real docs (publishing rules,
-						versioning, and tooling) as the project stabilizes.
-					</p>
-				</section>
+	<Card class="space-y-6">
+		<section class="space-y-3">
+			<h2 class="text-base font-semibold text-slate-900">About me</h2>
+			<p class="text-sm text-slate-700">
+				I’m the maintainer of GDPM. I’m building it to make publishing and installing Godot plugins feel
+				simple, predictable, and versioned.
+			</p>
+			<p class="text-sm text-slate-700">
+				This page is intentionally lightweight for now; it’ll grow into real docs (publishing rules,
+				versioning, and tooling) as the project stabilizes.
+			</p>
+		</section>
 
-				<section class="space-y-3">
-					<h2 class="text-base font-semibold text-slate-900">Quick links</h2>
-					<ul class="list-disc space-y-1 pl-5 text-sm text-slate-700">
-						<li>
-							<a class="font-semibold text-slate-900 hover:underline" href="/">Browse plugins</a>
-						</li>
-						<li>
-							<a class="font-semibold text-slate-900 hover:underline" href="/register">Create an account</a>
-						</li>
-						<li>
-							<a class="font-semibold text-slate-900 hover:underline" href="/signin">Sign in</a>
-						</li>
-					</ul>
-				</section>
-			</div>
-		</div>
-	</section>
+		<section class="space-y-3">
+			<h2 class="text-base font-semibold text-slate-900">Quick links</h2>
+			<ul class="list-disc space-y-1 pl-5 text-sm text-slate-700">
+				<li>
+					<a class="font-semibold text-slate-900 hover:underline" href="/">Browse plugins</a>
+				</li>
+				<li>
+					<a class="font-semibold text-slate-900 hover:underline" href="/register">Create an account</a>
+				</li>
+				<li>
+					<a class="font-semibold text-slate-900 hover:underline" href="/signin">Sign in</a>
+				</li>
+			</ul>
+		</section>
+	</Card>
 </RootLayout>
-

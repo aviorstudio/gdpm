@@ -1,0 +1,18 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'section'> {}
+
+const { class: className, ...sectionProps } = Astro.props as Props;
+
+const cardClass = [
+  'mx-auto mb-12 w-[calc(100%-2rem)] max-w-5xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:mb-16',
+  className,
+]
+  .filter(Boolean)
+  .join(' ');
+---
+
+<section class={cardClass} {...sectionProps}>
+  <slot />
+</section>

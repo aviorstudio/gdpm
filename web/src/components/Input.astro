@@ -1,0 +1,19 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'input'> {
+	label: string;
+	wrapperClass?: string;
+}
+
+const { label, wrapperClass = '', class: className, ...inputProps } = Astro.props as Props;
+const baseInput =
+	'rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400';
+const inputClass = [baseInput, className].filter(Boolean).join(' ');
+const labelClass = ['grid gap-1 text-sm font-semibold text-slate-900', wrapperClass].filter(Boolean).join(' ');
+---
+
+<label class={labelClass}>
+	<span>{label}</span>
+	<input class={inputClass} {...inputProps} />
+</label>

@@ -2,9 +2,10 @@
 export const prerender = false;
 
 import RootLayout from '../layouts/RootLayout.astro';
-import ModalDialog from '../components/ModalDialog.astro';
-import PageHeader from '../components/PageHeader.astro';
-import ReleaseList from '../components/ReleaseList.astro';
+import Dialog from '../components/Dialog.astro';
+import Splash from '../components/Splash.astro';
+import PluginList from '../components/PluginList.astro';
+import Input from '../components/Input.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../lib/auth';
 import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
@@ -230,130 +231,73 @@ if (!usernameNormal) {
 ---
 
 <RootLayout>
-  <section class="flex justify-center px-4 py-12 md:py-16">
-    <div class="w-full max-w-5xl space-y-6">
-      <header class="flex flex-col gap-4 text-center sm:text-left md:flex-row md:items-end md:justify-between">
-        <PageHeader title={pageTone === 'not-found' ? 'Not found' : entityLabel || `@${usernameParam}`}>
-          <Fragment slot="subtitle">
-            {pageTone === 'not-found'
-              ? 'No user or organization owns that username.'
-              : githubUserUrl
-                ? (
-                  <a
-                    class="font-semibold text-slate-900 hover:underline"
-                    href={githubUserUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {githubUserLabel}
-                  </a>
-                )
-                : 'Browse all addons'}
-          </Fragment>
-        </PageHeader>
+  <Splash
+    title={pageTone === 'not-found' ? 'Not found' : entityLabel || `@${usernameParam}`}
+    subtitle={pageTone === 'not-found'
+      ? 'No user or organization owns that username.'
+      : githubUserUrl ? undefined : 'Browse all addons'}
+    subtitleLink={pageTone !== 'not-found' && githubUserUrl
+      ? { href: githubUserUrl, label: githubUserLabel, external: true }
+      : undefined}
+    action={canCreatePlugin && pageTone === 'default' ? { href: '?create=1', label: 'Create plugin' } : undefined}
+  />
 
-        {
-          canCreatePlugin && pageTone === 'default' && (
-            <a
-              class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
-              href="?create=1"
-            >
-              Create plugin
-            </a>
-          )
-        }
-      </header>
-
-      <div class="w-full space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        {pageStatus && (
-          <p
-            class:list={{
-              'text-sm font-medium': true,
-              'text-red-600': pageTone === 'error',
-              'text-slate-600': pageTone !== 'error',
-            }}
-          >
-            {pageStatus}
-          </p>
-        )}
-
-        {
-          pageTone !== 'error' && publishedPlugins.length === 0 ? (
-            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-              <p class="text-sm font-semibold text-slate-900">
-                {pageTone === 'not-found' ? 'No matching owner' : 'No plugins yet'}
-              </p>
-              <p class="mt-1 text-sm text-slate-600">
-                {pageTone === 'not-found'
-                  ? 'Double-check the username and try again.'
-                  : 'This account has not published any plugins.'}
-              </p>
-            </div>
-          ) : pageTone === 'error' ? null : (
-            <ReleaseList items={publishedPlugins} />
-          )
-        }
-      </div>
-    </div>
-  </section>
+  <PluginList
+    items={publishedPlugins}
+    status={pageStatus}
+    tone={pageTone === 'error' ? 'error' : 'muted'}
+    hideBodyWhenError
+    emptyTitle={pageTone === 'not-found' ? 'No matching owner' : 'No plugins yet'}
+    emptySubtitle={pageTone === 'not-found'
+      ? 'Double-check the username and try again.'
+      : 'This account has not published any plugins.'}
+  />
 
   {
     canCreatePlugin && (
-      <ModalDialog id="create-plugin-dialog" open={showCreatePluginDialog} title="Create a plugin" size="lg">
+      <Dialog id="create-plugin-dialog" open={showCreatePluginDialog} title="Create a plugin" size="lg">
         <Fragment slot="description">
           Add a plugin name, repository, and initial release.
         </Fragment>
 
-        <form method="post" action={Astro.url.pathname} class="space-y-4">
-          <label class="grid gap-1 text-sm font-semibold text-slate-900">
-            Plugin name
-            <input
-              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              name="name"
-              placeholder="my-awesome-addon"
-              type="text"
-              value={formName}
-              required
-            />
-          </label>
+	        <form method="post" action={Astro.url.pathname} class="space-y-4">
+	          <Input
+	            label="Plugin name"
+	            name="name"
+	            placeholder="my-awesome-addon"
+	            type="text"
+	            value={formName}
+	            required
+	          />
 
-          <label class="grid gap-1 text-sm font-semibold text-slate-900">
-            Repository
-            <input
-              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              name="repo"
-              placeholder="github.com/owner/repo"
-              type="text"
-              value={formRepo}
-              required
-            />
-          </label>
+	          <Input
+	            label="Repository"
+	            name="repo"
+	            placeholder="github.com/owner/repo"
+	            type="text"
+	            value={formRepo}
+	            required
+	          />
 
-          <div class="grid gap-4 md:grid-cols-2">
-            <label class="grid gap-1 text-sm font-semibold text-slate-900">
-              Version
-              <input
-                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-                name="version"
-                placeholder="0.1.0"
-                type="text"
-                value={formVersion}
-                required
-              />
-            </label>
+	          <div class="grid gap-4 md:grid-cols-2">
+	            <Input
+	              label="Version"
+	              name="version"
+	              placeholder="0.1.0"
+	              type="text"
+	              value={formVersion}
+	              required
+	            />
 
-            <label class="grid gap-1 text-sm font-semibold text-slate-900">
-              Sha
-              <input
-                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-                name="sha"
-                placeholder="Git commit sha"
-                type="text"
-                value={formSha}
-                required
-              />
-            </label>
-          </div>
+	            <Input
+	              label="Sha"
+	              name="sha"
+	              placeholder="Git commit sha"
+	              type="text"
+	              value={formSha}
+	              required
+	            />
+	          </div>
 
           <p
             class:list={{
@@ -381,7 +325,7 @@ if (!usernameNormal) {
             </button>
           </div>
         </form>
-      </ModalDialog>
+      </Dialog>
     )
   }
 </RootLayout>

@@ -1,0 +1,40 @@
+---
+import AuthTabs from './AuthTabs.astro';
+
+interface Props {
+  status?: string;
+  tone?: 'muted' | 'error' | 'success';
+  mode: 'signin' | 'register';
+  action?: string;
+}
+
+const { status = '', tone = 'muted', mode, action } = Astro.props as Props;
+const formAction = action ?? (mode === 'signin' ? '/api/auth/signin' : '/register');
+---
+
+<form
+	class="mx-auto mb-12 w-[calc(100%-2rem)] max-w-xl space-y-5 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm md:mb-16"
+	method="post"
+	action={formAction}
+>
+	<AuthTabs mode={mode} />
+
+	<slot />
+
+	<button
+		class="w-full rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+		type="submit"
+	>
+		{mode === 'signin' ? 'Sign in' : 'Create account'}
+	</button>
+	<p
+		class:list={{
+			'min-h-[20px] text-sm': true,
+			'text-slate-500': tone === 'muted',
+			'text-red-600': tone === 'error',
+			'text-green-600': tone === 'success',
+		}}
+	>
+		{status}
+	</p>
+</form>

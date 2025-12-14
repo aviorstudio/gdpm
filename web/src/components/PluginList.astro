@@ -1,0 +1,160 @@
+---
+import Card from './Card.astro';
+
+export type PluginListItem = {
+  ownerLabel?: string;
+  ownerHref?: string;
+  pluginLabel: string;
+  pluginHref?: string;
+  metaLabel?: string;
+  metaHref?: string;
+  date?: string;
+};
+
+export type PluginListTone = 'muted' | 'error';
+
+export type Props = {
+  items: PluginListItem[];
+  status?: string;
+  tone?: PluginListTone;
+  emptyTitle?: string;
+  emptySubtitle?: string;
+  hideBodyWhenError?: boolean;
+};
+
+const {
+  items,
+  status = '',
+  tone = 'muted',
+  emptyTitle = 'Nothing here yet',
+  emptySubtitle = '',
+  hideBodyWhenError = false,
+} = Astro.props as Props;
+
+const formatDate = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
+};
+
+const isExternalHref = (value?: string) => /^https?:\/\//i.test(value ?? '');
+
+const shouldRenderBody = !(hideBodyWhenError && tone === 'error');
+---
+
+<Card class="space-y-4">
+  {status && (
+    <p
+      class:list={{
+        'text-sm font-medium': true,
+        'text-red-600': tone === 'error',
+        'text-slate-600': tone !== 'error',
+      }}
+    >
+      {status}
+    </p>
+  )}
+
+  {
+    shouldRenderBody
+      ? items.length === 0 ? (
+        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+          <p class="text-sm font-semibold text-slate-900">{emptyTitle}</p>
+          {emptySubtitle && (
+            <p class="mt-1 text-sm text-slate-600">
+              {emptySubtitle}
+            </p>
+          )}
+        </div>
+      ) : (
+        <ul class="divide-y divide-slate-200">
+          {
+            items.map((item) => (
+              <li class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0 space-y-1">
+                  {item.ownerLabel ? (
+                    <p class="break-words text-sm font-semibold text-slate-900">
+                      {(item.ownerHref ? (
+                        <a
+                          class="text-slate-900 hover:underline"
+                          href={item.ownerHref}
+                          target={isExternalHref(item.ownerHref) ? '_blank' : undefined}
+                          rel={isExternalHref(item.ownerHref) ? 'noopener noreferrer' : undefined}
+                        >
+                          {item.ownerLabel}
+                        </a>
+                      ) : (
+                        <span class="text-slate-900">{item.ownerLabel}</span>
+                      ))}<span class="text-slate-400">/</span>{(item.pluginHref ? (
+                        <a
+                          class="text-slate-900 hover:underline"
+                          href={item.pluginHref}
+                          target={isExternalHref(item.pluginHref) ? '_blank' : undefined}
+                          rel={isExternalHref(item.pluginHref) ? 'noopener noreferrer' : undefined}
+                        >
+                          {item.pluginLabel}
+                        </a>
+                      ) : (
+                        <span class="text-slate-900">{item.pluginLabel}</span>
+                      ))}
+                      {item.metaLabel && (
+                        <>
+                          {' '}
+                          {item.metaHref ? (
+                            <a
+                              class="text-xs font-semibold text-slate-600 hover:underline"
+                              href={item.metaHref}
+                              target={isExternalHref(item.metaHref) ? '_blank' : undefined}
+                              rel={isExternalHref(item.metaHref) ? 'noopener noreferrer' : undefined}
+                            >
+                              {item.metaLabel}
+                            </a>
+                          ) : (
+                            <span class="text-xs font-semibold text-slate-600">{item.metaLabel}</span>
+                          )}
+                        </>
+                      )}
+                    </p>
+                  ) : item.pluginHref ? (
+                    <a
+                      class="break-words text-sm font-semibold text-slate-900 hover:underline"
+                      href={item.pluginHref}
+                      target={isExternalHref(item.pluginHref) ? '_blank' : undefined}
+                      rel={isExternalHref(item.pluginHref) ? 'noopener noreferrer' : undefined}
+                    >
+                      {item.pluginLabel}
+                    </a>
+                  ) : (
+                    <p class="break-words text-sm font-semibold text-slate-900">{item.pluginLabel}</p>
+                  )}
+
+                  {item.metaLabel && !item.ownerLabel &&
+                    (item.metaHref ? (
+                      <a
+                        class="text-xs font-semibold text-slate-600 hover:underline"
+                        href={item.metaHref}
+                        target={isExternalHref(item.metaHref) ? '_blank' : undefined}
+                        rel={isExternalHref(item.metaHref) ? 'noopener noreferrer' : undefined}
+                      >
+                        {item.metaLabel}
+                      </a>
+                    ) : (
+                      <p class="text-xs font-semibold text-slate-600">{item.metaLabel}</p>
+                    ))}
+                </div>
+                {item.date && (
+                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                    <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">
+                      <time datetime={item.date}>{formatDate(item.date)}</time>
+                    </span>
+                  </div>
+                )}
+              </li>
+            ))
+          }
+        </ul>
+      )
+      : null
+  }
+</Card>
