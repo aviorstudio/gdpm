@@ -16,7 +16,8 @@ import (
 )
 
 type AddOptions struct {
-	Spec string
+	Spec        string
+	AllowLinked bool
 }
 
 func Add(ctx context.Context, opts AddOptions) error {
@@ -46,6 +47,10 @@ func Add(ctx context.Context, opts AddOptions) error {
 	pkg, err := spec.ParsePackageSpec(opts.Spec)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	}
+
+	if existing, ok := m.Plugins[pkg.Name()]; ok && strings.TrimSpace(existing.Path) != "" && !opts.AllowLinked {
+		return fmt.Errorf("%w: plugin is linked (run `gdpm unlink %s` first)", ErrUserInput, pkg.Name())
 	}
 
 	db := gdpmdb.NewDefaultClient()
@@ -78,24 +83,13 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return err
 	}
 
-	addonDirName := strings.ReplaceAll(pkg.Name(), "/", "_")
-	if err := validateAddonDirName(addonDirName); err != nil {
+	addonDirName, err := addonDirNameForPluginKey(pkg.Name())
+	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
 
-	rel := filepath.Join("addons", addonDirName)
-	for otherName := range m.Plugins {
-		if otherName == pkg.Name() {
-			continue
-		}
-		parsed, err := spec.ParsePackageSpec(otherName)
-		if err != nil {
-			return fmt.Errorf("invalid plugin in gdpm.json: %s", otherName)
-		}
-		otherAddonDirName := strings.ReplaceAll(parsed.Name(), "/", "_")
-		if otherAddonDirName == addonDirName {
-			return fmt.Errorf("%w: path %s is already managed by %s", ErrUserInput, rel, otherName)
-		}
+	if err := validateNoAddonDirCollision(m, pkg.Name(), addonDirName); err != nil {
+		return err
 	}
 
 	dst := filepath.Join(localAddonsDir, addonDirName)
@@ -118,6 +112,7 @@ func Add(ctx context.Context, opts AddOptions) error {
 	m = manifest.UpsertPlugin(m, pkg.Name(), manifest.Plugin{
 		Repo:    gdpmdb.GitHubTreeURL(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA),
 		Version: resolved.Version,
+		Path:    "",
 	})
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
