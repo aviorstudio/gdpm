@@ -43,7 +43,7 @@ const isExternalHref = (value?: string) => /^https?:\/\//i.test(value ?? '');
 const shouldRenderBody = !(hideBodyWhenError && tone === 'error');
 ---
 
-<Card class="space-y-4">
+<Card class="flex flex-col gap-4">
   {status && (
     <p
       class:list={{
@@ -59,10 +59,10 @@ const shouldRenderBody = !(hideBodyWhenError && tone === 'error');
   {
     shouldRenderBody
       ? items.length === 0 ? (
-        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+        <div class="flex flex-col gap-1 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
           <p class="text-sm font-semibold text-slate-900">{emptyTitle}</p>
           {emptySubtitle && (
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="text-sm text-slate-600">
               {emptySubtitle}
             </p>
           )}
@@ -72,7 +72,7 @@ const shouldRenderBody = !(hideBodyWhenError && tone === 'error');
           {
             items.map((item) => (
               <li class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div class="min-w-0 space-y-1">
+                <div class="flex min-w-0 flex-col gap-1">
                   {item.ownerLabel ? (
                     <p class="break-words text-sm font-semibold text-slate-900">
                       {(item.ownerHref ? (

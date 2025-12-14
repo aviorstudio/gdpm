@@ -245,7 +245,7 @@ if (Astro.request.method === 'POST') {
           <span class="font-semibold text-slate-900">{pendingEmail}</span>.
         </Fragment>
 
-        <form method="post" action="/register" class="space-y-4">
+        <form method="post" action="/register" class="flex flex-col gap-4">
           <input type="hidden" name="step" value="verify" hidden />
           <input type="hidden" name="username" value={pendingUsername} hidden />
           <input type="hidden" name="email" value={pendingEmail} hidden />
