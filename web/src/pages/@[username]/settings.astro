@@ -3,7 +3,7 @@ export const prerender = false;
 
 import RootLayout from '../../layouts/RootLayout.astro';
 import Card from '../../components/Card.astro';
-import Splash from '../../components/Splash.astro';
+import Title from '../../components/Title.astro';
 import Input from '../../components/Input.astro';
 import { getSessionFromCookies } from '../../lib/auth';
 import { usernamesDto } from '../../lib/dtoService';
@@ -56,7 +56,7 @@ const usernameDisplay = usernameRecord.username_display || usernameParam;
 ---
 
 <RootLayout>
-  <Splash title="Settings" subtitle="Manage your profile details. Saving changes isn’t wired up yet." />
+  <Title title="Settings" subtitle="Manage your profile details. Saving changes isn’t wired up yet." />
 
   <Card class="space-y-5">
     <div class="grid gap-4 md:grid-cols-2">

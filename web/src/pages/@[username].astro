@@ -3,7 +3,7 @@ export const prerender = false;
 
 import RootLayout from '../layouts/RootLayout.astro';
 import Dialog from '../components/Dialog.astro';
-import Splash from '../components/Splash.astro';
+import Title from '../components/Title.astro';
 import PluginList from '../components/PluginList.astro';
 import Input from '../components/Input.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../lib/auth';
@@ -231,7 +231,7 @@ if (!usernameNormal) {
 ---
 
 <RootLayout>
-  <Splash
+  <Title
     title={pageTone === 'not-found' ? 'Not found' : entityLabel || `@${usernameParam}`}
     subtitle={pageTone === 'not-found'
       ? 'No user or organization owns that username.'

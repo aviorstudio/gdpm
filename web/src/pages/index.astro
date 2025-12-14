@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import RootLayout from '../layouts/RootLayout.astro';
-import Splash from '../components/Splash.astro';
+import Title from '../components/Title.astro';
 import PluginList from '../components/PluginList.astro';
 import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
@@ -110,7 +110,7 @@ const pluginList = plugins.map((plugin) => {
 ---
 
 <RootLayout>
-  <Splash title="All plugins" subtitle="Browse all addons" />
+  <Title title="All plugins" subtitle="Browse all addons" />
   <PluginList
     items={pluginList}
     status={pluginsStatus}

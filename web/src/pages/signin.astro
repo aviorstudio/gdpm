@@ -4,7 +4,7 @@ export const prerender = false;
 import RootLayout from '../layouts/RootLayout.astro';
 import AuthForm from '../components/AuthForm.astro';
 import Input from '../components/Input.astro';
-import Title from '../components/Title.astro';
+import Splash from '../components/Splash.astro';
 import { hasAuthCookies } from '../lib/auth';
 
 if (hasAuthCookies(Astro.cookies)) {
@@ -13,7 +13,7 @@ if (hasAuthCookies(Astro.cookies)) {
 ---
 
 <RootLayout>
-	<Title />
+	<Splash />
 	<AuthForm mode="signin">
 		<Input label="Email" name="email" type="email" autocomplete="email" />
 		<Input label="Password" name="password" type="password" autocomplete="current-password" />
