@@ -4,11 +4,11 @@ export const prerender = false;
 import RootLayout from '../layouts/RootLayout.astro';
 import PageHeader from '../components/PageHeader.astro';
 import ReleaseList from '../components/ReleaseList.astro';
-import { packageVersionsDto, packagesDto, usernamesDto } from '../lib/dtoService';
+import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
 import { supabase } from '../lib/supabase';
 
-type PackageRecord = {
+type PluginRecord = {
   id: string;
   name: string | null;
   repo: string | null;
@@ -17,8 +17,8 @@ type PackageRecord = {
   org_id: string | null;
 };
 
-type PackageVersionRecord = {
-  package_id: string;
+type PluginVersionRecord = {
+  plugin_id: string;
   version: string | null;
   sha: string | null;
   created_at: string | null;
@@ -30,21 +30,21 @@ type UsernameRecord = {
   org_id: string | null;
 };
 
-let packagesStatus = '';
+let pluginsStatus = '';
 
-const { data: packagesData, error: packagesError } = await packagesDto.listAll(supabase);
-if (packagesError) packagesStatus = packagesError.message;
+const { data: pluginsData, error: pluginsError } = await pluginsDto.listAll(supabase);
+if (pluginsError) pluginsStatus = pluginsError.message;
 
-const packages = (packagesData as PackageRecord[] | null) ?? [];
+const plugins = (pluginsData as PluginRecord[] | null) ?? [];
 
-const latestReleaseByPackageId = new Map<string, { version: string; sha: string; createdAt: string }>();
-if (packages.length > 0) {
-  const packageIds = packages.map((pkg) => pkg.id);
-  const { data: versionRows, error: versionError } = await packageVersionsDto.listByPackageIds(supabase, packageIds);
+const latestReleaseByPluginId = new Map<string, { version: string; sha: string; createdAt: string }>();
+if (plugins.length > 0) {
+  const pluginIds = plugins.map((plugin) => plugin.id);
+  const { data: versionRows, error: versionError } = await pluginVersionsDto.listByPluginIds(supabase, pluginIds);
   if (!versionError) {
-    for (const row of (versionRows as PackageVersionRecord[] | null) ?? []) {
-      if (!latestReleaseByPackageId.has(row.package_id)) {
-        latestReleaseByPackageId.set(row.package_id, {
+    for (const row of (versionRows as PluginVersionRecord[] | null) ?? []) {
+      if (!latestReleaseByPluginId.has(row.plugin_id)) {
+        latestReleaseByPluginId.set(row.plugin_id, {
           version: row.version ?? '',
           sha: row.sha ?? '',
           createdAt: row.created_at ?? '',
@@ -54,8 +54,8 @@ if (packages.length > 0) {
   }
 }
 
-const profileIds = Array.from(new Set(packages.map((pkg) => pkg.profile_id).filter(Boolean) as string[]));
-const orgIds = Array.from(new Set(packages.map((pkg) => pkg.org_id).filter(Boolean) as string[]));
+const profileIds = Array.from(new Set(plugins.map((plugin) => plugin.profile_id).filter(Boolean) as string[]));
+const orgIds = Array.from(new Set(plugins.map((plugin) => plugin.org_id).filter(Boolean) as string[]));
 
 const usernameByProfileId = new Map<string, string>();
 if (profileIds.length > 0) {
@@ -83,28 +83,28 @@ if (orgIds.length > 0) {
   }
 }
 
-const packageList = packages.map((pkg) => {
-  const ownerDisplay = pkg.profile_id
-    ? usernameByProfileId.get(pkg.profile_id) ?? ''
-    : pkg.org_id
-      ? usernameByOrgId.get(pkg.org_id) ?? ''
+const pluginList = plugins.map((plugin) => {
+  const ownerDisplay = plugin.profile_id
+    ? usernameByProfileId.get(plugin.profile_id) ?? ''
+    : plugin.org_id
+      ? usernameByOrgId.get(plugin.org_id) ?? ''
       : '';
   const ownerPath = ownerDisplay ? `/@${encodeURIComponent(ownerDisplay)}` : '';
-  const packageSlug = pkg.name ?? '';
-  const packagePath = ownerDisplay && packageSlug ? `${ownerPath}/${encodeURIComponent(packageSlug)}` : '';
-  const latestRelease = latestReleaseByPackageId.get(pkg.id);
-  const repoUrl = pkg.repo ? toRepoUrl(pkg.repo) : '';
+  const pluginSlug = plugin.name ?? '';
+  const pluginPath = ownerDisplay && pluginSlug ? `${ownerPath}/${encodeURIComponent(pluginSlug)}` : '';
+  const latestRelease = latestReleaseByPluginId.get(plugin.id);
+  const repoUrl = plugin.repo ? toRepoUrl(plugin.repo) : '';
   const versionLabel = latestRelease?.version ? latestRelease.version : 'No versions';
   const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha) : '';
 
   return {
     ownerLabel: ownerDisplay ? `@${ownerDisplay}` : undefined,
     ownerHref: ownerPath || undefined,
-    packageLabel: packageSlug || 'Untitled package',
-    packageHref: packagePath || undefined,
+    pluginLabel: pluginSlug || 'Untitled plugin',
+    pluginHref: pluginPath || undefined,
     metaLabel: versionLabel,
     metaHref: treeUrl || undefined,
-    date: latestRelease?.createdAt || pkg.created_at || '',
+    date: latestRelease?.createdAt || plugin.created_at || '',
   };
 });
 ---
@@ -117,18 +117,18 @@ const packageList = packages.map((pkg) => {
       </header>
 
       <div class="w-full space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        {packagesStatus && <p class="text-sm font-medium text-red-600">{packagesStatus}</p>}
+        {pluginsStatus && <p class="text-sm font-medium text-red-600">{pluginsStatus}</p>}
 
         {
-          packageList.length === 0 ? (
+          pluginList.length === 0 ? (
             <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-              <p class="text-sm font-semibold text-slate-900">No packages yet</p>
+              <p class="text-sm font-semibold text-slate-900">No plugins yet</p>
               <p class="mt-1 text-sm text-slate-600">
                 Be the first to publish a Godot add-on.
               </p>
             </div>
           ) : (
-            <ReleaseList items={packageList} />
+            <ReleaseList items={pluginList} />
           )
         }
       </div>

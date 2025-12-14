@@ -14,9 +14,9 @@ export default defineConfig({
       status: 301,
       destination: '/@[username]',
     },
-    '/[username]/[pkg]': {
+    '/[username]/[plugin]': {
       status: 301,
-      destination: '/@[username]/[pkg]',
+      destination: '/@[username]/[plugin]',
     },
     '/[username]/account': {
       status: 301,

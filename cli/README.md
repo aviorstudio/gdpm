@@ -1,0 +1,28 @@
+# GDPM CLI
+
+Installs Godot addons from GitHub repositories into your project's `addons/` folder and tracks them in `gdpm.json`.
+
+## Build
+
+From `cli/`:
+
+```sh
+go build ./cmd/gdpm
+```
+
+## Usage
+
+```sh
+gdpm init
+gdpm add @username/plugin@1.2.3
+gdpm add @username/plugin
+gdpm remove @username/plugin
+```
+
+`gdpm.json` uses:
+
+```json
+{ "schemaVersion": "0.0.1", "plugins": { "@user/plugin": { "repo": "https://github.com/owner/repo/tree/<sha>", "version": "1.2.3" } } }
+```
+
+If you hit GitHub rate limits, set `GITHUB_TOKEN`.

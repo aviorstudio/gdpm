@@ -6,7 +6,7 @@ import ModalDialog from '../../components/ModalDialog.astro';
 import PageHeader from '../../components/PageHeader.astro';
 import ReleaseList from '../../components/ReleaseList.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../../lib/auth';
-import { packagesDto, packageVersionsDto, usernamesDto } from '../../lib/dtoService';
+import { pluginVersionsDto, pluginsDto, usernamesDto } from '../../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../../lib/repo';
 import { supabase } from '../../lib/supabase';
 
@@ -16,15 +16,15 @@ type UsernameRecord = {
   org_id: string | null;
 };
 
-type PackageRecord = {
+type PluginRecord = {
   id: string;
   name: string | null;
   repo: string | null;
   created_at: string | null;
 };
 
-type PackageVersionRecord = {
-  package_id: string | null;
+type PluginVersionRecord = {
+  plugin_id: string | null;
   version: string | null;
   sha: string | null;
   created_at: string | null;
@@ -44,8 +44,8 @@ const usernameParamRaw = Astro.params.username ?? '';
 const usernameParam = safeDecodeURIComponent(usernameParamRaw);
 const usernameNormal = normalizeUsername(usernameParam);
 
-const pkgParamRaw = Astro.params.pkg ?? '';
-const packageName = safeDecodeURIComponent(pkgParamRaw).trim();
+const pluginParamRaw = Astro.params.plugin ?? '';
+const pluginName = safeDecodeURIComponent(pluginParamRaw).trim();
 
 const session = hasAuthCookies(Astro.cookies) ? await getSessionFromCookies(Astro.cookies) : null;
 const profileId = session?.user?.id ?? '';
@@ -67,7 +67,7 @@ if (showCreateReleaseDialog && !session) {
   return Astro.redirect('/signin');
 }
 
-let pkg: {
+let plugin: {
   id: string;
   name: string;
   repo: string;
@@ -83,10 +83,10 @@ let versions: Array<{
 const notFound = () => {
   Astro.response.status = 404;
   pageTone = 'not-found';
-  pageStatus = 'That package could not be found.';
+  pageStatus = 'That plugin could not be found.';
 };
 
-if (!usernameNormal || !packageName) {
+if (!usernameNormal || !pluginName) {
   notFound();
 } else {
   const { data: usernameRow, error: usernameError } = await usernamesDto.getByUsernameNormal(supabase, usernameNormal);
@@ -121,24 +121,24 @@ if (!usernameNormal || !packageName) {
     } else if (!ownerProfileId && !ownerOrgId) {
       notFound();
     } else {
-      const { data: packageRow, error: packageError } = ownerOrgId
-        ? await packagesDto.getByOrgIdAndName(supabase, ownerOrgId, packageName)
-        : await packagesDto.getByProfileIdAndName(supabase, ownerProfileId ?? '', packageName);
+      const { data: pluginRow, error: pluginError } = ownerOrgId
+        ? await pluginsDto.getByOrgIdAndName(supabase, ownerOrgId, pluginName)
+        : await pluginsDto.getByProfileIdAndName(supabase, ownerProfileId ?? '', pluginName);
 
-      if (packageError) {
+      if (pluginError) {
         Astro.response.status = 500;
         pageTone = 'error';
-        pageStatus = packageError.message;
-      } else if (!packageRow) {
+        pageStatus = pluginError.message;
+      } else if (!pluginRow) {
         notFound();
       } else {
-        const packageRecord = packageRow as PackageRecord;
+        const pluginRecord = pluginRow as PluginRecord;
 
-        pkg = {
-          id: packageRecord.id,
-          name: packageRecord.name ?? packageName,
-          repo: packageRecord.repo ?? '',
-          createdAt: packageRecord.created_at ?? '',
+        plugin = {
+          id: pluginRecord.id,
+          name: pluginRecord.name ?? pluginName,
+          repo: pluginRecord.repo ?? '',
+          createdAt: pluginRecord.created_at ?? '',
         };
 
         if (Astro.request.method === 'POST') {
@@ -162,8 +162,8 @@ if (!usernameNormal || !packageName) {
               createStatus = 'Version and sha are required.';
               createTone = 'error';
             } else {
-              const { error: versionError } = await packageVersionsDto.insert(supabase, {
-                package_id: pkg.id,
+              const { error: versionError } = await pluginVersionsDto.insert(supabase, {
+                plugin_id: plugin.id,
                 version: formVersion,
                 sha: formSha,
               });
@@ -178,13 +178,13 @@ if (!usernameNormal || !packageName) {
           }
         }
 
-        const { data: versionRows, error: versionError } = await packageVersionsDto.listByPackageId(supabase, pkg.id);
+        const { data: versionRows, error: versionError } = await pluginVersionsDto.listByPluginId(supabase, plugin.id);
         if (versionError) {
           Astro.response.status = 500;
           pageTone = 'error';
           pageStatus = versionError.message;
         } else {
-          versions = ((versionRows as PackageVersionRecord[] | null) ?? [])
+          versions = ((versionRows as PluginVersionRecord[] | null) ?? [])
             .map((row) => ({
               version: row.version ?? '',
               sha: row.sha ?? '',
@@ -197,11 +197,11 @@ if (!usernameNormal || !packageName) {
 }
 
 const ownerPath = `/@${ownerSlug}`;
-const repoUrl = pkg?.repo ? toRepoUrl(pkg.repo) : '';
+const repoUrl = plugin?.repo ? toRepoUrl(plugin.repo) : '';
 const repoLabel = repoUrl ? repoUrl.replace(/^https?:\/\//i, '') : '';
 const versionList = versions.map((version) => ({
-  packageLabel: version.version || 'Unknown version',
-  packageHref: version.sha ? toGitHubTreeUrl(repoUrl, version.sha) : undefined,
+  pluginLabel: version.version || 'Unknown version',
+  pluginHref: version.sha ? toGitHubTreeUrl(repoUrl, version.sha) : undefined,
   date: version.createdAt,
 }));
 ---
@@ -210,19 +210,19 @@ const versionList = versions.map((version) => ({
   <section class="flex justify-center px-4 py-12 md:py-16">
     <div class="w-full max-w-5xl space-y-6">
       <header class="flex flex-col gap-4 text-center sm:text-left md:flex-row md:items-end md:justify-between">
-        <PageHeader title={pageTone === 'not-found' ? 'Not found' : `${ownerLabel || `@${usernameParam}`} / ${pkg?.name || packageName}`}>
+        <PageHeader title={pageTone === 'not-found' ? 'Not found' : `${ownerLabel || `@${usernameParam}`} / ${plugin?.name || pluginName}`}>
           {pageTone !== 'not-found' && (
             <Fragment slot="title">
               <a class="text-slate-900 hover:underline" href={ownerPath}>
                 {ownerLabel || `@${usernameParam}`}
               </a>{' '}
               <span class="text-slate-400">/</span>{' '}
-              <span>{pkg?.name || packageName}</span>
+              <span>{plugin?.name || pluginName}</span>
             </Fragment>
           )}
           <Fragment slot="subtitle">
             {pageTone === 'not-found'
-              ? 'No package matches that URL.'
+              ? 'No plugin matches that URL.'
               : repoUrl
                 ? (
                   <a
@@ -231,7 +231,7 @@ const versionList = versions.map((version) => ({
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    {repoLabel || pkg?.repo || repoUrl}
+                    {repoLabel || plugin?.repo || repoUrl}
                   </a>
                 )
                 : 'No repository linked.'}
@@ -267,12 +267,12 @@ const versionList = versions.map((version) => ({
           pageTone !== 'error' && versions.length === 0 ? (
             <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
               <p class="text-sm font-semibold text-slate-900">
-                {pageTone === 'not-found' ? 'No matching package' : 'No versions yet'}
+                {pageTone === 'not-found' ? 'No matching plugin' : 'No versions yet'}
               </p>
               <p class="mt-1 text-sm text-slate-600">
                 {pageTone === 'not-found'
                   ? 'Double-check the URL and try again.'
-                  : 'This package has not published any versions.'}
+                  : 'This plugin has not published any versions.'}
               </p>
             </div>
           ) : pageTone === 'error' ? null : (

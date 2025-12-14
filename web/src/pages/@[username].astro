@@ -6,7 +6,7 @@ import ModalDialog from '../components/ModalDialog.astro';
 import PageHeader from '../components/PageHeader.astro';
 import ReleaseList from '../components/ReleaseList.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../lib/auth';
-import { packageVersionsDto, packagesDto, usernamesDto } from '../lib/dtoService';
+import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
 import { supabase } from '../lib/supabase';
 
@@ -16,15 +16,15 @@ type UsernameRecord = {
   org_id: string | null;
 };
 
-type PackageRecord = {
+type PluginRecord = {
   id: string;
   name: string | null;
   repo: string | null;
   created_at: string | null;
 };
 
-type PackageVersionRecord = {
-  package_id: string;
+type PluginVersionRecord = {
+  plugin_id: string;
   version: string | null;
   sha: string | null;
   created_at: string | null;
@@ -68,9 +68,9 @@ if (showCreatePluginDialog && !session) {
   return Astro.redirect('/signin');
 }
 
-let publishedPackages: Array<{
-  packageLabel: string;
-  packageHref?: string;
+let publishedPlugins: Array<{
+  pluginLabel: string;
+  pluginHref?: string;
   metaLabel?: string;
   metaHref?: string;
   date: string;
@@ -116,7 +116,7 @@ if (!usernameNormal) {
       if (showCreatePluginDialog && !canCreatePlugin) {
         Astro.response.status = 403;
         pageTone = 'error';
-        pageStatus = 'You do not have permission to publish packages for this account.';
+        pageStatus = 'You do not have permission to publish plugins for this account.';
         showCreatePluginDialog = false;
       }
 
@@ -130,7 +130,7 @@ if (!usernameNormal) {
         if (!canCreatePlugin) {
           Astro.response.status = 403;
           pageTone = 'error';
-          createStatus = 'You do not have permission to publish packages for this account.';
+          createStatus = 'You do not have permission to publish plugins for this account.';
           createTone = 'error';
         } else {
           const formData = await Astro.request.formData();
@@ -140,25 +140,25 @@ if (!usernameNormal) {
           formSha = String(formData.get('sha') ?? '').trim();
 
           if (!formName || !formRepo || !formVersion || !formSha) {
-            createStatus = 'Package name, repository, version, and sha are required.';
+            createStatus = 'Plugin name, repository, version, and sha are required.';
             createTone = 'error';
           } else {
-            const { data: createdPackage, error: packageError } = await packagesDto.insert(supabase, {
+            const { data: createdPlugin, error: pluginError } = await pluginsDto.insert(supabase, {
               profile_id: ownerProfileId,
               org_id: null,
               name: formName,
               repo: formRepo,
             });
 
-            if (packageError) {
-              createStatus = packageError.message;
+            if (pluginError) {
+              createStatus = pluginError.message;
               createTone = 'error';
-            } else if (!createdPackage?.id) {
-              createStatus = 'Package created but no id returned.';
+            } else if (!createdPlugin?.id) {
+              createStatus = 'Plugin created but no id returned.';
               createTone = 'error';
             } else {
-              const { error: versionError } = await packageVersionsDto.insert(supabase, {
-                package_id: createdPackage.id,
+              const { error: versionError } = await pluginVersionsDto.insert(supabase, {
+                plugin_id: createdPlugin.id,
                 version: formVersion,
                 sha: formSha,
               });
@@ -174,30 +174,30 @@ if (!usernameNormal) {
         }
       }
 
-      const { data: packagesData, error: packagesError } = ownerOrgId
-        ? await packagesDto.listByOrgId(supabase, ownerOrgId)
-        : await packagesDto.listByProfileId(supabase, ownerProfileId ?? '');
+      const { data: pluginsData, error: pluginsError } = ownerOrgId
+        ? await pluginsDto.listByOrgId(supabase, ownerOrgId)
+        : await pluginsDto.listByProfileId(supabase, ownerProfileId ?? '');
 
-      if (packagesError) {
+      if (pluginsError) {
         Astro.response.status = 500;
         pageTone = 'error';
-        pageStatus = packagesError.message;
+        pageStatus = pluginsError.message;
       } else {
-        const packages = (packagesData as PackageRecord[] | null) ?? [];
+        const plugins = (pluginsData as PluginRecord[] | null) ?? [];
 
-        const latestReleaseByPackageId = new Map<string, { version: string; sha: string; createdAt: string }>();
-        if (packages.length > 0) {
-          const packageIds = packages.map((pkg) => pkg.id);
-          const { data: versionRows, error: versionError } = await packageVersionsDto.listByPackageIds(
+        const latestReleaseByPluginId = new Map<string, { version: string; sha: string; createdAt: string }>();
+        if (plugins.length > 0) {
+          const pluginIds = plugins.map((plugin) => plugin.id);
+          const { data: versionRows, error: versionError } = await pluginVersionsDto.listByPluginIds(
             supabase,
-            packageIds
+            pluginIds
           );
           if (versionError) {
-            pageStatus = pageStatus || 'Unable to load package versions.';
+            pageStatus = pageStatus || 'Unable to load plugin versions.';
           } else {
-            for (const row of (versionRows as PackageVersionRecord[] | null) ?? []) {
-              if (!latestReleaseByPackageId.has(row.package_id)) {
-                latestReleaseByPackageId.set(row.package_id, {
+            for (const row of (versionRows as PluginVersionRecord[] | null) ?? []) {
+              if (!latestReleaseByPluginId.has(row.plugin_id)) {
+                latestReleaseByPluginId.set(row.plugin_id, {
                   version: row.version ?? '',
                   sha: row.sha ?? '',
                   createdAt: row.created_at ?? '',
@@ -207,20 +207,20 @@ if (!usernameNormal) {
           }
         }
 
-        publishedPackages = packages.map((pkg) => {
-          const packageSlug = pkg.name ?? '';
-          const packageHref = packageSlug ? `/@${entitySlug}/${encodeURIComponent(packageSlug)}` : undefined;
-          const latestRelease = latestReleaseByPackageId.get(pkg.id);
-          const repoUrl = pkg.repo ? toRepoUrl(pkg.repo) : '';
+        publishedPlugins = plugins.map((plugin) => {
+          const pluginSlug = plugin.name ?? '';
+          const pluginHref = pluginSlug ? `/@${entitySlug}/${encodeURIComponent(pluginSlug)}` : undefined;
+          const latestRelease = latestReleaseByPluginId.get(plugin.id);
+          const repoUrl = plugin.repo ? toRepoUrl(plugin.repo) : '';
           const versionLabel = latestRelease?.version ? latestRelease.version : 'No versions';
           const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha) : '';
 
           return {
-            packageLabel: packageSlug || 'Untitled package',
-            packageHref,
+            pluginLabel: pluginSlug || 'Untitled plugin',
+            pluginHref,
             metaLabel: versionLabel,
             metaHref: treeUrl || undefined,
-            date: latestRelease?.createdAt || pkg.created_at || '',
+            date: latestRelease?.createdAt || plugin.created_at || '',
           };
         });
       }
@@ -278,19 +278,19 @@ if (!usernameNormal) {
         )}
 
         {
-          pageTone !== 'error' && publishedPackages.length === 0 ? (
+          pageTone !== 'error' && publishedPlugins.length === 0 ? (
             <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
               <p class="text-sm font-semibold text-slate-900">
-                {pageTone === 'not-found' ? 'No matching owner' : 'No packages yet'}
+                {pageTone === 'not-found' ? 'No matching owner' : 'No plugins yet'}
               </p>
               <p class="mt-1 text-sm text-slate-600">
                 {pageTone === 'not-found'
                   ? 'Double-check the username and try again.'
-                  : 'This account has not published any packages.'}
+                  : 'This account has not published any plugins.'}
               </p>
             </div>
           ) : pageTone === 'error' ? null : (
-            <ReleaseList items={publishedPackages} />
+            <ReleaseList items={publishedPlugins} />
           )
         }
       </div>
