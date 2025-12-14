@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import AppHeader from '../components/AppHeader.astro';
 ---
 
 <!doctype html>
@@ -12,6 +13,9 @@ import '../styles/global.css';
 		<title>GDPM | Supabase Auth</title>
 	</head>
 	<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
-		<slot />
+		<AppHeader />
+		<main>
+			<slot />
+		</main>
 	</body>
 </html>

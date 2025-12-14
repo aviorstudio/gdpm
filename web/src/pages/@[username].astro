@@ -1,0 +1,387 @@
+---
+export const prerender = false;
+
+import RootLayout from '../layouts/RootLayout.astro';
+import ModalDialog from '../components/ModalDialog.astro';
+import PageHeader from '../components/PageHeader.astro';
+import ReleaseList from '../components/ReleaseList.astro';
+import { getSessionFromCookies, hasAuthCookies } from '../lib/auth';
+import { packageVersionsDto, packagesDto, usernamesDto } from '../lib/dtoService';
+import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
+import { supabase } from '../lib/supabase';
+
+type UsernameRecord = {
+  username_display: string | null;
+  profile_id: string | null;
+  org_id: string | null;
+};
+
+type PackageRecord = {
+  id: string;
+  name: string | null;
+  repo: string | null;
+  created_at: string | null;
+};
+
+type PackageVersionRecord = {
+  package_id: string;
+  version: string | null;
+  sha: string | null;
+  created_at: string | null;
+};
+
+const safeDecodeURIComponent = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
+
+const usernameParamRaw = Astro.params.username ?? '';
+const usernameParam = safeDecodeURIComponent(usernameParamRaw);
+const usernameNormal = normalizeUsername(usernameParam);
+
+const session = hasAuthCookies(Astro.cookies) ? await getSessionFromCookies(Astro.cookies) : null;
+const profileId = session?.user?.id ?? '';
+
+let pageTone: 'default' | 'not-found' | 'error' = 'default';
+let pageStatus = '';
+let entityLabel = '';
+let entitySlug = '';
+let githubUserUrl = '';
+let githubUserLabel = '';
+
+let canCreatePlugin = false;
+let showCreatePluginDialog = Astro.url.searchParams.get('create') === '1';
+let createStatus = '';
+let createTone: 'muted' | 'error' | 'success' = 'muted';
+
+let formName = '';
+let formRepo = '';
+let formVersion = '';
+let formSha = '';
+
+if (showCreatePluginDialog && !session) {
+  return Astro.redirect('/signin');
+}
+
+let publishedPackages: Array<{
+  packageLabel: string;
+  packageHref?: string;
+  metaLabel?: string;
+  metaHref?: string;
+  date: string;
+}> = [];
+
+if (!usernameNormal) {
+  Astro.response.status = 404;
+  pageTone = 'not-found';
+  pageStatus = 'That user could not be found.';
+} else {
+  const { data: usernameRow, error: usernameError } = await usernamesDto.getByUsernameNormal(supabase, usernameNormal);
+
+  if (usernameError) {
+    Astro.response.status = 500;
+    pageTone = 'error';
+    pageStatus = usernameError.message;
+  } else if (!usernameRow) {
+    Astro.response.status = 404;
+    pageTone = 'not-found';
+    pageStatus = 'That user could not be found.';
+  } else {
+    const usernameRecord = usernameRow as UsernameRecord;
+    const usernameDisplay = usernameRecord.username_display || usernameParam;
+
+    const ownerProfileId = usernameRecord.profile_id;
+    const ownerOrgId = usernameRecord.org_id;
+
+    if (ownerProfileId && ownerOrgId) {
+      Astro.response.status = 500;
+      pageTone = 'error';
+      pageStatus = 'Username is assigned to multiple owners.';
+    } else if (!ownerProfileId && !ownerOrgId) {
+      Astro.response.status = 404;
+      pageTone = 'not-found';
+      pageStatus = 'That user could not be found.';
+    } else {
+      entityLabel = `@${usernameDisplay}`;
+      entitySlug = encodeURIComponent(usernameDisplay);
+      githubUserUrl = `https://github.com/${encodeURIComponent(usernameDisplay)}`;
+      githubUserLabel = `github.com/${usernameDisplay}`;
+      canCreatePlugin = Boolean(ownerProfileId && profileId && ownerProfileId === profileId);
+
+      if (showCreatePluginDialog && !canCreatePlugin) {
+        Astro.response.status = 403;
+        pageTone = 'error';
+        pageStatus = 'You do not have permission to publish packages for this account.';
+        showCreatePluginDialog = false;
+      }
+
+      if (Astro.request.method === 'POST') {
+        if (!session || !profileId) {
+          return Astro.redirect('/signin');
+        }
+
+        showCreatePluginDialog = true;
+
+        if (!canCreatePlugin) {
+          Astro.response.status = 403;
+          pageTone = 'error';
+          createStatus = 'You do not have permission to publish packages for this account.';
+          createTone = 'error';
+        } else {
+          const formData = await Astro.request.formData();
+          formName = String(formData.get('name') ?? '').trim();
+          formRepo = String(formData.get('repo') ?? '').trim();
+          formVersion = String(formData.get('version') ?? '').trim();
+          formSha = String(formData.get('sha') ?? '').trim();
+
+          if (!formName || !formRepo || !formVersion || !formSha) {
+            createStatus = 'Package name, repository, version, and sha are required.';
+            createTone = 'error';
+          } else {
+            const { data: createdPackage, error: packageError } = await packagesDto.insert(supabase, {
+              profile_id: ownerProfileId,
+              org_id: null,
+              name: formName,
+              repo: formRepo,
+            });
+
+            if (packageError) {
+              createStatus = packageError.message;
+              createTone = 'error';
+            } else if (!createdPackage?.id) {
+              createStatus = 'Package created but no id returned.';
+              createTone = 'error';
+            } else {
+              const { error: versionError } = await packageVersionsDto.insert(supabase, {
+                package_id: createdPackage.id,
+                version: formVersion,
+                sha: formSha,
+              });
+
+              if (versionError) {
+                createStatus = versionError.message;
+                createTone = 'error';
+              } else {
+                return Astro.redirect(`/@${encodeURIComponent(usernameDisplay)}/${encodeURIComponent(formName)}`);
+              }
+            }
+          }
+        }
+      }
+
+      const { data: packagesData, error: packagesError } = ownerOrgId
+        ? await packagesDto.listByOrgId(supabase, ownerOrgId)
+        : await packagesDto.listByProfileId(supabase, ownerProfileId ?? '');
+
+      if (packagesError) {
+        Astro.response.status = 500;
+        pageTone = 'error';
+        pageStatus = packagesError.message;
+      } else {
+        const packages = (packagesData as PackageRecord[] | null) ?? [];
+
+        const latestReleaseByPackageId = new Map<string, { version: string; sha: string; createdAt: string }>();
+        if (packages.length > 0) {
+          const packageIds = packages.map((pkg) => pkg.id);
+          const { data: versionRows, error: versionError } = await packageVersionsDto.listByPackageIds(
+            supabase,
+            packageIds
+          );
+          if (versionError) {
+            pageStatus = pageStatus || 'Unable to load package versions.';
+          } else {
+            for (const row of (versionRows as PackageVersionRecord[] | null) ?? []) {
+              if (!latestReleaseByPackageId.has(row.package_id)) {
+                latestReleaseByPackageId.set(row.package_id, {
+                  version: row.version ?? '',
+                  sha: row.sha ?? '',
+                  createdAt: row.created_at ?? '',
+                });
+              }
+            }
+          }
+        }
+
+        publishedPackages = packages.map((pkg) => {
+          const packageSlug = pkg.name ?? '';
+          const packageHref = packageSlug ? `/@${entitySlug}/${encodeURIComponent(packageSlug)}` : undefined;
+          const latestRelease = latestReleaseByPackageId.get(pkg.id);
+          const repoUrl = pkg.repo ? toRepoUrl(pkg.repo) : '';
+          const versionLabel = latestRelease?.version ? latestRelease.version : 'No versions';
+          const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha) : '';
+
+          return {
+            packageLabel: packageSlug || 'Untitled package',
+            packageHref,
+            metaLabel: versionLabel,
+            metaHref: treeUrl || undefined,
+            date: latestRelease?.createdAt || pkg.created_at || '',
+          };
+        });
+      }
+    }
+  }
+}
+---
+
+<RootLayout>
+  <section class="flex justify-center px-4 py-12 md:py-16">
+    <div class="w-full max-w-5xl space-y-6">
+      <header class="flex flex-col gap-4 text-center sm:text-left md:flex-row md:items-end md:justify-between">
+        <PageHeader title={pageTone === 'not-found' ? 'Not found' : entityLabel || `@${usernameParam}`}>
+          <Fragment slot="subtitle">
+            {pageTone === 'not-found'
+              ? 'No user or organization owns that username.'
+              : githubUserUrl
+                ? (
+                  <a
+                    class="font-semibold text-slate-900 hover:underline"
+                    href={githubUserUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {githubUserLabel}
+                  </a>
+                )
+                : 'Browse all addons'}
+          </Fragment>
+        </PageHeader>
+
+        {
+          canCreatePlugin && pageTone === 'default' && (
+            <a
+              class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+              href="?create=1"
+            >
+              Create plugin
+            </a>
+          )
+        }
+      </header>
+
+      <div class="w-full space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        {pageStatus && (
+          <p
+            class:list={{
+              'text-sm font-medium': true,
+              'text-red-600': pageTone === 'error',
+              'text-slate-600': pageTone !== 'error',
+            }}
+          >
+            {pageStatus}
+          </p>
+        )}
+
+        {
+          pageTone !== 'error' && publishedPackages.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+              <p class="text-sm font-semibold text-slate-900">
+                {pageTone === 'not-found' ? 'No matching owner' : 'No packages yet'}
+              </p>
+              <p class="mt-1 text-sm text-slate-600">
+                {pageTone === 'not-found'
+                  ? 'Double-check the username and try again.'
+                  : 'This account has not published any packages.'}
+              </p>
+            </div>
+          ) : pageTone === 'error' ? null : (
+            <ReleaseList items={publishedPackages} />
+          )
+        }
+      </div>
+    </div>
+  </section>
+
+  {
+    canCreatePlugin && (
+      <ModalDialog id="create-plugin-dialog" open={showCreatePluginDialog} title="Create a plugin" size="lg">
+        <Fragment slot="description">
+          Add a plugin name, repository, and initial release.
+        </Fragment>
+
+        <form method="post" action={Astro.url.pathname} class="space-y-4">
+          <label class="grid gap-1 text-sm font-semibold text-slate-900">
+            Plugin name
+            <input
+              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              name="name"
+              placeholder="my-awesome-addon"
+              type="text"
+              value={formName}
+              required
+            />
+          </label>
+
+          <label class="grid gap-1 text-sm font-semibold text-slate-900">
+            Repository
+            <input
+              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              name="repo"
+              placeholder="github.com/owner/repo"
+              type="text"
+              value={formRepo}
+              required
+            />
+          </label>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="grid gap-1 text-sm font-semibold text-slate-900">
+              Version
+              <input
+                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                name="version"
+                placeholder="0.1.0"
+                type="text"
+                value={formVersion}
+                required
+              />
+            </label>
+
+            <label class="grid gap-1 text-sm font-semibold text-slate-900">
+              Sha
+              <input
+                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                name="sha"
+                placeholder="Git commit sha"
+                type="text"
+                value={formSha}
+                required
+              />
+            </label>
+          </div>
+
+          <p
+            class:list={{
+              'min-h-[20px] text-sm': true,
+              'text-slate-500': createTone === 'muted',
+              'text-red-600': createTone === 'error',
+              'text-green-600': createTone === 'success',
+            }}
+          >
+            {createStatus}
+          </p>
+
+          <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <a
+              class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              href={Astro.url.pathname}
+            >
+              Cancel
+            </a>
+            <button
+              class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+              type="submit"
+            >
+              Create plugin
+            </button>
+          </div>
+        </form>
+      </ModalDialog>
+    )
+  }
+</RootLayout>

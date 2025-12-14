@@ -3,54 +3,15 @@ export const prerender = false;
 
 import AuthLayout from '../layouts/AuthLayout.astro';
 import AuthInput from '../components/AuthInput.astro';
-import {
-	readSessionFromCookies,
-	signInWithIdentifier,
-} from '../services/supabase';
+import { hasAuthCookies } from '../lib/auth';
 
-const earlySession = readSessionFromCookies(Astro.cookies);
-if (earlySession) {
-	return Astro.redirect('/');
-}
-
-let status = '';
-let tone: 'muted' | 'error' | 'success' = 'muted';
-
-if (Astro.request.method === 'POST') {
-	const formData = await Astro.request.formData();
-	const identifier = String(formData.get('identifier') ?? '').trim();
-	const password = String(formData.get('password') ?? '').trim();
-
-	if (!identifier || !password) {
-		status = 'Email or username and password are required.';
-		tone = 'error';
-	} else {
-		const { error, notice } = await signInWithIdentifier(
-			Astro.cookies,
-			identifier,
-			password,
-		);
-		if (error || notice) {
-			status = error;
-			tone = 'error';
-			if (notice) {
-				status = notice;
-				tone = 'success';
-			}
-		} else {
-			return Astro.redirect('/');
-		}
-	}
-}
-
-const laterSession = readSessionFromCookies(Astro.cookies);
-if (laterSession) {
+if (hasAuthCookies(Astro.cookies)) {
 	return Astro.redirect('/');
 }
 ---
 
-<AuthLayout status={status} tone={tone} mode="signin">
-	<AuthInput label="Email or username" name="identifier" autocomplete="username" />
+<AuthLayout mode="signin">
+	<AuthInput label="Email" name="email" type="email" autocomplete="email" />
 
 	<AuthInput
 		label="Password"

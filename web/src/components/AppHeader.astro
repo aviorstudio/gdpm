@@ -1,0 +1,137 @@
+---
+import { getAuthCookies, hasAuthCookies } from '../lib/auth';
+import { usernamesDto } from '../lib/dtoService';
+import { supabase } from '../lib/supabase';
+
+type UsernameRecord = {
+	username_display: string | null;
+};
+
+type HeaderActionVariant = 'text' | 'icon' | 'primary';
+type HeaderIconName = 'account' | 'settings';
+
+type HeaderAction = {
+	href: string;
+	label: string;
+	variant: HeaderActionVariant;
+	icon?: HeaderIconName;
+};
+
+const decodeJwtPayload = (token: string) => {
+	const parts = token.split('.');
+	if (parts.length !== 3) return null;
+
+	const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+	const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+
+	try {
+		const json = Buffer.from(padded, 'base64').toString('utf8');
+		return JSON.parse(json) as Record<string, unknown>;
+	} catch {
+		return null;
+	}
+};
+
+const hasTokens = hasAuthCookies(Astro.cookies);
+const { accessToken } = getAuthCookies(Astro.cookies);
+const accessTokenValue = accessToken?.value ?? '';
+const profileId = accessTokenValue ? String(decodeJwtPayload(accessTokenValue)?.sub ?? '') : '';
+const isSignedIn = Boolean(hasTokens && profileId);
+
+let usernameDisplayForProfile = '';
+let accountHref = '/';
+let settingsHref = '/';
+if (profileId) {
+	const { data: usernameRows, error: usernameError } = await usernamesDto.getByProfileId(supabase, profileId);
+	if (!usernameError) {
+		const usernameRecord = ((usernameRows as UsernameRecord[] | null) ?? []).find((row) => row.username_display);
+		usernameDisplayForProfile = usernameRecord?.username_display ?? '';
+	}
+}
+
+if (usernameDisplayForProfile) {
+	const usernamePath = `/@${encodeURIComponent(usernameDisplayForProfile)}`;
+	accountHref = usernamePath;
+	settingsHref = `${usernamePath}/settings`;
+}
+
+const textButtonClasses =
+	'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400';
+const primaryButtonClasses =
+	'inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600';
+const iconButtonClasses =
+	'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400';
+
+const actions: HeaderAction[] = [
+	{ href: '/docs', label: 'Docs', variant: 'text' },
+	...(isSignedIn
+		? ([
+				{ href: accountHref, label: 'Account', variant: 'icon', icon: 'account' },
+				{ href: settingsHref, label: 'Settings', variant: 'icon', icon: 'settings' },
+			] satisfies HeaderAction[])
+			: ([
+					{ href: '/signin', label: 'Sign in', variant: 'text' },
+					{ href: '/register', label: 'Register', variant: 'primary' },
+				] satisfies HeaderAction[])),
+];
+---
+
+<header class="border-b border-slate-200 bg-white/80 backdrop-blur">
+	<nav class="mx-auto flex max-w-5xl items-center justify-between px-4 py-4" aria-label="Primary">
+		<a class="text-lg font-semibold tracking-tight text-slate-900 hover:text-slate-700" href="/">
+			GDPM
+		</a>
+
+		<div class="flex items-center gap-2">
+			{
+					actions.map((action) => (
+						<a
+							class:list={{
+								[textButtonClasses]: action.variant === 'text',
+								[primaryButtonClasses]: action.variant === 'primary',
+								[iconButtonClasses]: action.variant === 'icon',
+							}}
+							href={action.href}
+							title={action.variant === 'icon' ? action.label : undefined}
+					>
+						{
+							action.icon === 'account' ? (
+								<svg
+									class="h-5 w-5"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+								>
+									<path d="M20 21a8 8 0 0 0-16 0" />
+									<circle cx="12" cy="7" r="4" />
+								</svg>
+								) : action.icon === 'settings' ? (
+									<svg
+										class="h-5 w-5"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+								>
+										<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065Z" />
+										<path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+									</svg>
+								) : null
+							}
+
+						{action.variant === 'icon' ? <span class="sr-only">{action.label}</span> : action.label}
+					</a>
+				))
+			}
+		</div>
+	</nav>
+</header>

@@ -1,0 +1,350 @@
+---
+export const prerender = false;
+
+import RootLayout from '../../layouts/RootLayout.astro';
+import ModalDialog from '../../components/ModalDialog.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import ReleaseList from '../../components/ReleaseList.astro';
+import { getSessionFromCookies, hasAuthCookies } from '../../lib/auth';
+import { packagesDto, packageVersionsDto, usernamesDto } from '../../lib/dtoService';
+import { toGitHubTreeUrl, toRepoUrl } from '../../lib/repo';
+import { supabase } from '../../lib/supabase';
+
+type UsernameRecord = {
+  username_display: string | null;
+  profile_id: string | null;
+  org_id: string | null;
+};
+
+type PackageRecord = {
+  id: string;
+  name: string | null;
+  repo: string | null;
+  created_at: string | null;
+};
+
+type PackageVersionRecord = {
+  package_id: string | null;
+  version: string | null;
+  sha: string | null;
+  created_at: string | null;
+};
+
+const safeDecodeURIComponent = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
+
+const usernameParamRaw = Astro.params.username ?? '';
+const usernameParam = safeDecodeURIComponent(usernameParamRaw);
+const usernameNormal = normalizeUsername(usernameParam);
+
+const pkgParamRaw = Astro.params.pkg ?? '';
+const packageName = safeDecodeURIComponent(pkgParamRaw).trim();
+
+const session = hasAuthCookies(Astro.cookies) ? await getSessionFromCookies(Astro.cookies) : null;
+const profileId = session?.user?.id ?? '';
+
+let pageTone: 'default' | 'not-found' | 'error' = 'default';
+let pageStatus = '';
+let ownerLabel = '';
+let ownerSlug = encodeURIComponent(usernameParam);
+
+let canCreateRelease = false;
+let showCreateReleaseDialog = Astro.url.searchParams.get('create') === '1';
+let createStatus = '';
+let createTone: 'muted' | 'error' | 'success' = 'muted';
+
+let formVersion = '';
+let formSha = '';
+
+if (showCreateReleaseDialog && !session) {
+  return Astro.redirect('/signin');
+}
+
+let pkg: {
+  id: string;
+  name: string;
+  repo: string;
+  createdAt: string;
+} | null = null;
+
+let versions: Array<{
+  version: string;
+  sha: string;
+  createdAt: string;
+}> = [];
+
+const notFound = () => {
+  Astro.response.status = 404;
+  pageTone = 'not-found';
+  pageStatus = 'That package could not be found.';
+};
+
+if (!usernameNormal || !packageName) {
+  notFound();
+} else {
+  const { data: usernameRow, error: usernameError } = await usernamesDto.getByUsernameNormal(supabase, usernameNormal);
+
+  if (usernameError) {
+    Astro.response.status = 500;
+    pageTone = 'error';
+    pageStatus = usernameError.message;
+  } else if (!usernameRow) {
+    notFound();
+  } else {
+    const usernameRecord = usernameRow as UsernameRecord;
+    const usernameDisplay = usernameRecord.username_display || usernameParam;
+    ownerLabel = `@${usernameDisplay}`;
+    ownerSlug = encodeURIComponent(usernameDisplay);
+
+    const ownerProfileId = usernameRecord.profile_id;
+    const ownerOrgId = usernameRecord.org_id;
+    canCreateRelease = Boolean(ownerProfileId && profileId && ownerProfileId === profileId);
+
+    if (showCreateReleaseDialog && !canCreateRelease) {
+      Astro.response.status = 403;
+      pageTone = 'error';
+      pageStatus = 'You do not have permission to publish releases for this plugin.';
+      showCreateReleaseDialog = false;
+    }
+
+    if (ownerProfileId && ownerOrgId) {
+      Astro.response.status = 500;
+      pageTone = 'error';
+      pageStatus = 'Username is assigned to multiple owners.';
+    } else if (!ownerProfileId && !ownerOrgId) {
+      notFound();
+    } else {
+      const { data: packageRow, error: packageError } = ownerOrgId
+        ? await packagesDto.getByOrgIdAndName(supabase, ownerOrgId, packageName)
+        : await packagesDto.getByProfileIdAndName(supabase, ownerProfileId ?? '', packageName);
+
+      if (packageError) {
+        Astro.response.status = 500;
+        pageTone = 'error';
+        pageStatus = packageError.message;
+      } else if (!packageRow) {
+        notFound();
+      } else {
+        const packageRecord = packageRow as PackageRecord;
+
+        pkg = {
+          id: packageRecord.id,
+          name: packageRecord.name ?? packageName,
+          repo: packageRecord.repo ?? '',
+          createdAt: packageRecord.created_at ?? '',
+        };
+
+        if (Astro.request.method === 'POST') {
+          if (!session || !profileId) {
+            return Astro.redirect('/signin');
+          }
+
+          showCreateReleaseDialog = true;
+
+          if (!canCreateRelease) {
+            Astro.response.status = 403;
+            pageTone = 'error';
+            createStatus = 'You do not have permission to publish releases for this plugin.';
+            createTone = 'error';
+          } else {
+            const formData = await Astro.request.formData();
+            formVersion = String(formData.get('version') ?? '').trim();
+            formSha = String(formData.get('sha') ?? '').trim();
+
+            if (!formVersion || !formSha) {
+              createStatus = 'Version and sha are required.';
+              createTone = 'error';
+            } else {
+              const { error: versionError } = await packageVersionsDto.insert(supabase, {
+                package_id: pkg.id,
+                version: formVersion,
+                sha: formSha,
+              });
+
+              if (versionError) {
+                createStatus = versionError.message;
+                createTone = 'error';
+              } else {
+                return Astro.redirect(Astro.url.pathname);
+              }
+            }
+          }
+        }
+
+        const { data: versionRows, error: versionError } = await packageVersionsDto.listByPackageId(supabase, pkg.id);
+        if (versionError) {
+          Astro.response.status = 500;
+          pageTone = 'error';
+          pageStatus = versionError.message;
+        } else {
+          versions = ((versionRows as PackageVersionRecord[] | null) ?? [])
+            .map((row) => ({
+              version: row.version ?? '',
+              sha: row.sha ?? '',
+              createdAt: row.created_at ?? '',
+            }));
+        }
+      }
+    }
+  }
+}
+
+const ownerPath = `/@${ownerSlug}`;
+const repoUrl = pkg?.repo ? toRepoUrl(pkg.repo) : '';
+const repoLabel = repoUrl ? repoUrl.replace(/^https?:\/\//i, '') : '';
+const versionList = versions.map((version) => ({
+  packageLabel: version.version || 'Unknown version',
+  packageHref: version.sha ? toGitHubTreeUrl(repoUrl, version.sha) : undefined,
+  date: version.createdAt,
+}));
+---
+
+<RootLayout>
+  <section class="flex justify-center px-4 py-12 md:py-16">
+    <div class="w-full max-w-5xl space-y-6">
+      <header class="flex flex-col gap-4 text-center sm:text-left md:flex-row md:items-end md:justify-between">
+        <PageHeader title={pageTone === 'not-found' ? 'Not found' : `${ownerLabel || `@${usernameParam}`} / ${pkg?.name || packageName}`}>
+          {pageTone !== 'not-found' && (
+            <Fragment slot="title">
+              <a class="text-slate-900 hover:underline" href={ownerPath}>
+                {ownerLabel || `@${usernameParam}`}
+              </a>{' '}
+              <span class="text-slate-400">/</span>{' '}
+              <span>{pkg?.name || packageName}</span>
+            </Fragment>
+          )}
+          <Fragment slot="subtitle">
+            {pageTone === 'not-found'
+              ? 'No package matches that URL.'
+              : repoUrl
+                ? (
+                  <a
+                    class="font-semibold text-slate-900 hover:underline"
+                    href={repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {repoLabel || pkg?.repo || repoUrl}
+                  </a>
+                )
+                : 'No repository linked.'}
+          </Fragment>
+        </PageHeader>
+
+        {
+          canCreateRelease && pageTone === 'default' && (
+            <a
+              class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+              href="?create=1"
+            >
+              Create release
+            </a>
+          )
+        }
+      </header>
+
+      <div class="w-full space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        {pageStatus && (
+          <p
+            class:list={{
+              'text-sm font-medium': true,
+              'text-red-600': pageTone === 'error',
+              'text-slate-600': pageTone !== 'error',
+            }}
+          >
+            {pageStatus}
+          </p>
+        )}
+
+        {
+          pageTone !== 'error' && versions.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+              <p class="text-sm font-semibold text-slate-900">
+                {pageTone === 'not-found' ? 'No matching package' : 'No versions yet'}
+              </p>
+              <p class="mt-1 text-sm text-slate-600">
+                {pageTone === 'not-found'
+                  ? 'Double-check the URL and try again.'
+                  : 'This package has not published any versions.'}
+              </p>
+            </div>
+          ) : pageTone === 'error' ? null : (
+            <ReleaseList items={versionList} />
+          )
+        }
+      </div>
+
+    </div>
+  </section>
+
+  {
+    canCreateRelease && (
+      <ModalDialog id="create-release-dialog" open={showCreateReleaseDialog} title="Create a release" size="lg">
+        <Fragment slot="description">
+          Publish a new release for this plugin.
+        </Fragment>
+
+        <form method="post" action={Astro.url.pathname} class="space-y-4">
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="grid gap-1 text-sm font-semibold text-slate-900">
+              Version
+              <input
+                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                name="version"
+                placeholder="0.1.0"
+                type="text"
+                value={formVersion}
+                required
+              />
+            </label>
+
+            <label class="grid gap-1 text-sm font-semibold text-slate-900">
+              Sha
+              <input
+                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                name="sha"
+                placeholder="Git commit sha"
+                type="text"
+                value={formSha}
+                required
+              />
+            </label>
+          </div>
+
+          <p
+            class:list={{
+              'min-h-[20px] text-sm': true,
+              'text-slate-500': createTone === 'muted',
+              'text-red-600': createTone === 'error',
+              'text-green-600': createTone === 'success',
+            }}
+          >
+            {createStatus}
+          </p>
+
+          <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <a
+              class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              href={Astro.url.pathname}
+            >
+              Cancel
+            </a>
+            <button
+              class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+              type="submit"
+            >
+              Create release
+            </button>
+          </div>
+        </form>
+      </ModalDialog>
+    )
+  }
+</RootLayout>

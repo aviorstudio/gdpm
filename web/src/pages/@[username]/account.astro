@@ -1,0 +1,6 @@
+---
+export const prerender = false;
+
+const targetPath = Astro.url.pathname.replace(/\/account\/?$/, '/settings');
+return Astro.redirect(`${targetPath}${Astro.url.search}`);
+---
