@@ -22,6 +22,10 @@ export const usernamesDto = {
   insert: (client: SupabaseClient, payload: UsernameInsert) => client.from('usernames').insert(payload),
   getByProfileId: (client: SupabaseClient, profileId: string) =>
     client.from('usernames').select('*').eq('profile_id', profileId),
+  listByProfileIds: (client: SupabaseClient, profileIds: string[]) =>
+    client.from('usernames').select('username_display,profile_id,org_id').in('profile_id', profileIds),
+  listByOrgIds: (client: SupabaseClient, orgIds: string[]) =>
+    client.from('usernames').select('username_display,profile_id,org_id').in('org_id', orgIds),
   getByUsernameNormal: (client: SupabaseClient, usernameNormal: string) =>
     client.from('usernames').select('*').eq('username_normal', usernameNormal).maybeSingle(),
 };
@@ -36,6 +40,11 @@ export type PackageInsert = {
 export const packagesDto = {
   insert: (client: SupabaseClient, payload: PackageInsert) =>
     client.from('packages').insert(payload).select('*').maybeSingle(),
+  listAll: (client: SupabaseClient) =>
+    client
+      .from('packages')
+      .select('id,name,repo,created_at,profile_id,org_id')
+      .order('created_at', { ascending: false }),
   listByProfileId: (client: SupabaseClient, profileId: string) =>
     client.from('packages').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
   listByOrgId: (client: SupabaseClient, orgId: string) =>
