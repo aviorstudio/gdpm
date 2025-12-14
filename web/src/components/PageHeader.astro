@@ -1,0 +1,29 @@
+---
+interface Props {
+  title?: string;
+  subtitle?: string;
+}
+
+const { title, subtitle = '' } = Astro.props as Props;
+
+const hasTitleSlot = Astro.slots.has('title');
+const shouldRenderTitle = hasTitleSlot || Boolean(title);
+
+const hasSubtitleSlot = Astro.slots.has('subtitle');
+const shouldRenderSubtitle = hasSubtitleSlot || Boolean(subtitle);
+---
+
+<div class="space-y-2">
+  {shouldRenderTitle && (
+    <h1 class="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
+      {hasTitleSlot ? <slot name="title" /> : title}
+    </h1>
+  )}
+  {
+    shouldRenderSubtitle && (
+      <p class="mx-auto max-w-3xl text-base text-slate-600 sm:mx-0">
+        {hasSubtitleSlot ? <slot name="subtitle" /> : subtitle}
+      </p>
+    )
+  }
+</div>

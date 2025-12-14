@@ -2,72 +2,11 @@
 export const prerender = false;
 
 import RootLayout from '../layouts/RootLayout.astro';
-import ModalDialog from '../components/ModalDialog.astro';
-import { getSessionFromCookies, hasAuthCookies } from '../lib/auth';
+import PageHeader from '../components/PageHeader.astro';
+import ReleaseList from '../components/ReleaseList.astro';
 import { packageVersionsDto, packagesDto, usernamesDto } from '../lib/dtoService';
+import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
 import { supabase } from '../lib/supabase';
-
-const session = hasAuthCookies(Astro.cookies) ? await getSessionFromCookies(Astro.cookies) : null;
-const profileId = session?.user?.id ?? '';
-
-let showCreatePackageDialog = Astro.url.searchParams.get('create') === '1';
-let createStatus = '';
-let createTone: 'muted' | 'error' | 'success' = 'muted';
-
-let formName = '';
-let formRepo = '';
-let formVersion = '';
-let formSha = '';
-
-if (showCreatePackageDialog && !session) {
-  return Astro.redirect('/signin');
-}
-
-if (Astro.request.method === 'POST') {
-  if (!session || !profileId) {
-    return Astro.redirect('/signin');
-  }
-
-  showCreatePackageDialog = true;
-  const formData = await Astro.request.formData();
-  formName = String(formData.get('name') ?? '').trim();
-  formRepo = String(formData.get('repo') ?? '').trim();
-  formVersion = String(formData.get('version') ?? '').trim();
-  formSha = String(formData.get('sha') ?? '').trim();
-
-  if (!formName || !formRepo || !formVersion || !formSha) {
-    createStatus = 'Package name, repository, version, and sha are required.';
-    createTone = 'error';
-  } else {
-    const { data: createdPackage, error: packageError } = await packagesDto.insert(supabase, {
-      profile_id: profileId,
-      org_id: null,
-      name: formName,
-      repo: formRepo,
-    });
-
-    if (packageError) {
-      createStatus = packageError.message;
-      createTone = 'error';
-    } else if (!createdPackage?.id) {
-      createStatus = 'Package created but no id returned.';
-      createTone = 'error';
-    } else {
-      const { error: versionError } = await packageVersionsDto.insert(supabase, {
-        package_id: createdPackage.id,
-        version: formVersion,
-        sha: formSha,
-      });
-
-      if (versionError) {
-        createStatus = versionError.message;
-        createTone = 'error';
-      } else {
-        return Astro.redirect('/');
-      }
-    }
-  }
-}
 
 type PackageRecord = {
   id: string;
@@ -81,6 +20,7 @@ type PackageRecord = {
 type PackageVersionRecord = {
   package_id: string;
   version: string | null;
+  sha: string | null;
   created_at: string | null;
 };
 
@@ -97,14 +37,18 @@ if (packagesError) packagesStatus = packagesError.message;
 
 const packages = (packagesData as PackageRecord[] | null) ?? [];
 
-const latestVersionByPackageId = new Map<string, string>();
+const latestReleaseByPackageId = new Map<string, { version: string; sha: string; createdAt: string }>();
 if (packages.length > 0) {
   const packageIds = packages.map((pkg) => pkg.id);
   const { data: versionRows, error: versionError } = await packageVersionsDto.listByPackageIds(supabase, packageIds);
   if (!versionError) {
     for (const row of (versionRows as PackageVersionRecord[] | null) ?? []) {
-      if (!latestVersionByPackageId.has(row.package_id)) {
-        latestVersionByPackageId.set(row.package_id, row.version ?? '');
+      if (!latestReleaseByPackageId.has(row.package_id)) {
+        latestReleaseByPackageId.set(row.package_id, {
+          version: row.version ?? '',
+          sha: row.sha ?? '',
+          createdAt: row.created_at ?? '',
+        });
       }
     }
   }
@@ -145,20 +89,22 @@ const packageList = packages.map((pkg) => {
     : pkg.org_id
       ? usernameByOrgId.get(pkg.org_id) ?? ''
       : '';
-  const ownerLabel = ownerDisplay ? `@${ownerDisplay}` : 'Unknown owner';
   const ownerPath = ownerDisplay ? `/@${encodeURIComponent(ownerDisplay)}` : '';
   const packageSlug = pkg.name ?? '';
   const packagePath = ownerDisplay && packageSlug ? `${ownerPath}/${encodeURIComponent(packageSlug)}` : '';
+  const latestRelease = latestReleaseByPackageId.get(pkg.id);
+  const repoUrl = pkg.repo ? toRepoUrl(pkg.repo) : '';
+  const versionLabel = latestRelease?.version ? latestRelease.version : 'No versions';
+  const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha) : '';
 
   return {
-    id: pkg.id,
-    name: pkg.name ?? 'Untitled package',
-    repo: pkg.repo ?? '',
-    ownerLabel,
-    ownerPath,
-    packagePath,
-    createdAt: pkg.created_at ?? '',
-    latestVersion: latestVersionByPackageId.get(pkg.id) ?? '',
+    ownerLabel: ownerDisplay ? `@${ownerDisplay}` : undefined,
+    ownerHref: ownerPath || undefined,
+    packageLabel: packageSlug || 'Untitled package',
+    packageHref: packagePath || undefined,
+    metaLabel: versionLabel,
+    metaHref: treeUrl || undefined,
+    date: latestRelease?.createdAt || pkg.created_at || '',
   };
 });
 ---
@@ -167,43 +113,10 @@ const packageList = packages.map((pkg) => {
   <section class="flex justify-center px-4 py-12 md:py-16">
     <div class="w-full max-w-5xl space-y-6">
       <header class="flex flex-col gap-4 text-center sm:text-left md:flex-row md:items-end md:justify-between">
-        <div class="space-y-2">
-          <h1 class="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
-            All packages
-          </h1>
-          <p class="mx-auto max-w-3xl text-base text-slate-600 sm:mx-0">
-            Browse packages published on GDPM.
-          </p>
-        </div>
-
-        {
-          session ? (
-            <a
-              class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
-              href="/?create=1"
-            >
-              Create package
-            </a>
-          ) : (
-            <a
-              class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              href="/signin"
-            >
-              Sign in to publish
-            </a>
-          )
-        }
+        <PageHeader title="All plugins" subtitle="Browse all addons" />
       </header>
 
       <div class="w-full space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex flex-col gap-1">
-          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-sky-600">Packages</p>
-          <div class="flex items-center justify-between text-sm text-slate-600">
-            <p class="font-semibold text-slate-900">Published</p>
-            <p>{packageList.length} total</p>
-          </div>
-        </div>
-
         {packagesStatus && <p class="text-sm font-medium text-red-600">{packagesStatus}</p>}
 
         {
@@ -215,138 +128,10 @@ const packageList = packages.map((pkg) => {
               </p>
             </div>
           ) : (
-            <ul class="divide-y divide-slate-200">
-              {
-                packageList.map((pkg) => (
-                  <li class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="space-y-1">
-                      {
-                        pkg.packagePath ? (
-                          <a class="text-sm font-semibold text-slate-900 hover:underline" href={pkg.packagePath}>
-                            {pkg.name}
-                          </a>
-                        ) : (
-                          <p class="text-sm font-semibold text-slate-900">{pkg.name}</p>
-                        )
-                      }
-                      <div class="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                        {
-                          pkg.ownerPath ? (
-                            <a class="font-semibold text-slate-900 hover:underline" href={pkg.ownerPath}>
-                              {pkg.ownerLabel}
-                            </a>
-                          ) : (
-                            <span class="font-semibold text-slate-900">{pkg.ownerLabel}</span>
-                          )
-                        }
-                        {pkg.repo && <span>{pkg.repo}</span>}
-                      </div>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
-                      <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">
-                        {pkg.latestVersion ? pkg.latestVersion : 'No versions'}
-                      </span>
-                      {pkg.createdAt && (
-                        <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">
-                          <time datetime={pkg.createdAt}>{new Date(pkg.createdAt).toLocaleDateString()}</time>
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                ))
-              }
-            </ul>
+            <ReleaseList items={packageList} />
           )
         }
       </div>
     </div>
   </section>
-
-  {
-    session && (
-      <ModalDialog id="create-package-dialog" open={showCreatePackageDialog} title="Create a package" size="lg">
-        <Fragment slot="description">
-          Add a package name, repository, and initial version. Publishing is coming next.
-        </Fragment>
-
-        <form method="post" action="/" class="space-y-4">
-          <label class="grid gap-1 text-sm font-semibold text-slate-900">
-            Package name
-            <input
-              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              name="name"
-              placeholder="my-awesome-addon"
-              type="text"
-              value={formName}
-              required
-            />
-          </label>
-
-          <label class="grid gap-1 text-sm font-semibold text-slate-900">
-            Repository
-            <input
-              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              name="repo"
-              placeholder="github.com/owner/repo"
-              type="text"
-              value={formRepo}
-              required
-            />
-          </label>
-
-          <div class="grid gap-4 md:grid-cols-2">
-            <label class="grid gap-1 text-sm font-semibold text-slate-900">
-              Version
-              <input
-                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-                name="version"
-                placeholder="0.1.0"
-                type="text"
-                value={formVersion}
-                required
-              />
-            </label>
-
-            <label class="grid gap-1 text-sm font-semibold text-slate-900">
-              Sha
-              <input
-                class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-                name="sha"
-                placeholder="Git commit sha"
-                type="text"
-                value={formSha}
-                required
-              />
-            </label>
-          </div>
-
-          <p
-            class:list={{
-              'min-h-[20px] text-sm': true,
-              'text-slate-500': createTone === 'muted',
-              'text-red-600': createTone === 'error',
-              'text-green-600': createTone === 'success',
-            }}
-          >
-            {createStatus}
-          </p>
-
-          <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <a
-              class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              href="/"
-            >
-              Cancel
-            </a>
-            <button
-              class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
-              type="submit"
-            >
-              Create package
-            </button>
-          </div>
-        </form>
-      </ModalDialog>
-    )
-  }
 </RootLayout>
