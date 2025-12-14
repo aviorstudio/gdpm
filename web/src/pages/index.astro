@@ -146,7 +146,7 @@ const packageList = packages.map((pkg) => {
       ? usernameByOrgId.get(pkg.org_id) ?? ''
       : '';
   const ownerLabel = ownerDisplay ? `@${ownerDisplay}` : 'Unknown owner';
-  const ownerPath = ownerDisplay ? `/${encodeURIComponent(ownerDisplay)}` : '';
+  const ownerPath = ownerDisplay ? `/@${encodeURIComponent(ownerDisplay)}` : '';
   const packageSlug = pkg.name ?? '';
   const packagePath = ownerDisplay && packageSlug ? `${ownerPath}/${encodeURIComponent(packageSlug)}` : '';
 
