@@ -30,40 +30,40 @@ export const usernamesDto = {
     client.from('usernames').select('*').eq('username_normal', usernameNormal).maybeSingle(),
 };
 
-export type PackageInsert = {
+export type PluginInsert = {
   profile_id?: string | null;
   org_id?: string | null;
   name: string;
   repo: string;
 };
 
-export const packagesDto = {
-  insert: (client: SupabaseClient, payload: PackageInsert) =>
-    client.from('packages').insert(payload).select('*').maybeSingle(),
+export const pluginsDto = {
+  insert: (client: SupabaseClient, payload: PluginInsert) =>
+    client.from('plugins').insert(payload).select('*').maybeSingle(),
   listAll: (client: SupabaseClient) =>
     client
-      .from('packages')
+      .from('plugins')
       .select('id,name,repo,created_at,profile_id,org_id')
       .order('created_at', { ascending: false }),
   listByProfileId: (client: SupabaseClient, profileId: string) =>
-    client.from('packages').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
+    client.from('plugins').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
   listByOrgId: (client: SupabaseClient, orgId: string) =>
-    client.from('packages').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+    client.from('plugins').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
   getByProfileIdAndName: (client: SupabaseClient, profileId: string, name: string) =>
-    client.from('packages').select('*').eq('profile_id', profileId).eq('name', name).maybeSingle(),
+    client.from('plugins').select('*').eq('profile_id', profileId).eq('name', name).maybeSingle(),
   getByOrgIdAndName: (client: SupabaseClient, orgId: string, name: string) =>
-    client.from('packages').select('*').eq('org_id', orgId).eq('name', name).maybeSingle(),
+    client.from('plugins').select('*').eq('org_id', orgId).eq('name', name).maybeSingle(),
 };
 
-export const packageVersionsDto = {
-  insert: (client: SupabaseClient, payload: { package_id: string; version: string; sha: string }) =>
-    client.from('package_versions').insert(payload).select('*').maybeSingle(),
-  listByPackageIds: (client: SupabaseClient, packageIds: string[]) =>
+export const pluginVersionsDto = {
+  insert: (client: SupabaseClient, payload: { plugin_id: string; version: string; sha: string }) =>
+    client.from('plugin_versions').insert(payload).select('*').maybeSingle(),
+  listByPluginIds: (client: SupabaseClient, pluginIds: string[]) =>
     client
-      .from('package_versions')
+      .from('plugin_versions')
       .select('*')
-      .in('package_id', packageIds)
+      .in('plugin_id', pluginIds)
       .order('created_at', { ascending: false }),
-  listByPackageId: (client: SupabaseClient, packageId: string) =>
-    client.from('package_versions').select('*').eq('package_id', packageId).order('created_at', { ascending: false }),
+  listByPluginId: (client: SupabaseClient, pluginId: string) =>
+    client.from('plugin_versions').select('*').eq('plugin_id', pluginId).order('created_at', { ascending: false }),
 };
