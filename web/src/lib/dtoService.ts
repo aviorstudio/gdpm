@@ -40,6 +40,10 @@ export const packagesDto = {
     client.from('packages').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
   listByOrgId: (client: SupabaseClient, orgId: string) =>
     client.from('packages').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+  getByProfileIdAndName: (client: SupabaseClient, profileId: string, name: string) =>
+    client.from('packages').select('*').eq('profile_id', profileId).eq('name', name).maybeSingle(),
+  getByOrgIdAndName: (client: SupabaseClient, orgId: string, name: string) =>
+    client.from('packages').select('*').eq('org_id', orgId).eq('name', name).maybeSingle(),
 };
 
 export const packageVersionsDto = {
@@ -51,4 +55,6 @@ export const packageVersionsDto = {
       .select('*')
       .in('package_id', packageIds)
       .order('created_at', { ascending: false }),
+  listByPackageId: (client: SupabaseClient, packageId: string) =>
+    client.from('package_versions').select('*').eq('package_id', packageId).order('created_at', { ascending: false }),
 };

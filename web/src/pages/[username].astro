@@ -41,9 +41,11 @@ const usernameNormal = normalizeUsername(usernameParam);
 let pageTone: 'default' | 'not-found' | 'error' = 'default';
 let pageStatus = '';
 let entityLabel = '';
+let entitySlug = '';
 
 let publishedPackages: Array<{
   id: string;
+  slug: string;
   name: string;
   repo: string;
   createdAt: string;
@@ -82,6 +84,7 @@ if (!usernameNormal) {
       pageStatus = 'That user could not be found.';
     } else {
       entityLabel = `@${usernameDisplay}`;
+      entitySlug = encodeURIComponent(usernameDisplay);
 
       const { data: packagesData, error: packagesError } = ownerOrgId
         ? await packagesDto.listByOrgId(supabase, ownerOrgId)
@@ -114,6 +117,7 @@ if (!usernameNormal) {
 
         publishedPackages = packages.map((pkg) => ({
           id: pkg.id,
+          slug: pkg.name ?? '',
           name: pkg.name ?? 'Untitled package',
           repo: pkg.repo ?? '',
           createdAt: pkg.created_at ?? '',
@@ -195,7 +199,16 @@ if (!usernameNormal) {
                 publishedPackages.map((pkg) => (
                   <li class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="space-y-1">
-                      <p class="text-sm font-semibold text-slate-900">{pkg.name}</p>
+                      {pkg.slug ? (
+                        <a
+                          class="text-sm font-semibold text-slate-900 hover:underline"
+                          href={`/${entitySlug}/${encodeURIComponent(pkg.slug)}`}
+                        >
+                          {pkg.name}
+                        </a>
+                      ) : (
+                        <p class="text-sm font-semibold text-slate-900">{pkg.name}</p>
+                      )}
                       {pkg.repo && <p class="text-sm text-slate-600">{pkg.repo}</p>}
                     </div>
                     <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">

@@ -1,0 +1,294 @@
+---
+export const prerender = false;
+
+import RootLayout from '../../layouts/RootLayout.astro';
+import { packagesDto, packageVersionsDto, usernamesDto } from '../../lib/dtoService';
+import { supabase } from '../../lib/supabase';
+
+type UsernameRecord = {
+  username_display: string | null;
+  profile_id: string | null;
+  org_id: string | null;
+};
+
+type PackageRecord = {
+  id: string;
+  name: string | null;
+  repo: string | null;
+  created_at: string | null;
+};
+
+type PackageVersionRecord = {
+  package_id: string | null;
+  version: string | null;
+  sha: string | null;
+  created_at: string | null;
+};
+
+const safeDecodeURIComponent = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
+
+const toRepoUrl = (value: string) => {
+  const repo = value.trim();
+  if (!repo) return '';
+
+  if (/^https?:\/\//i.test(repo)) return repo;
+
+  const gitSshMatch = repo.match(/^git@([^:]+):(.+)$/i);
+  if (gitSshMatch) {
+    const host = gitSshMatch[1];
+    const path = gitSshMatch[2].replace(/\.git$/i, '').replace(/^\/+/, '');
+    return `https://${host}/${path}`;
+  }
+
+  const sanitized = repo.replace(/^\/+/, '');
+  return `https://${sanitized}`;
+};
+
+const toCommitUrl = (repoUrl: string, sha: string) => {
+  if (!repoUrl || !sha) return '';
+
+  let url: URL;
+  try {
+    url = new URL(repoUrl);
+  } catch {
+    return '';
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const repoPath = url.pathname.replace(/\/+$/, '');
+  const encodedSha = encodeURIComponent(sha);
+
+  if (hostname.endsWith('github.com')) {
+    return `${url.origin}${repoPath}/tree/${encodedSha}`;
+  }
+
+  if (hostname.endsWith('gitlab.com')) {
+    return `${url.origin}${repoPath}/-/tree/${encodedSha}`;
+  }
+
+  return repoUrl;
+};
+
+const usernameParamRaw = Astro.params.username ?? '';
+const usernameParam = safeDecodeURIComponent(usernameParamRaw);
+const usernameNormal = normalizeUsername(usernameParam);
+
+const pkgParamRaw = Astro.params.pkg ?? '';
+const packageName = safeDecodeURIComponent(pkgParamRaw).trim();
+
+let pageTone: 'default' | 'not-found' | 'error' = 'default';
+let pageStatus = '';
+let ownerLabel = '';
+let ownerSlug = encodeURIComponent(usernameParam);
+
+let pkg: {
+  id: string;
+  name: string;
+  repo: string;
+  createdAt: string;
+} | null = null;
+
+let versions: Array<{
+  version: string;
+  sha: string;
+  createdAt: string;
+}> = [];
+
+const notFound = () => {
+  Astro.response.status = 404;
+  pageTone = 'not-found';
+  pageStatus = 'That package could not be found.';
+};
+
+if (!usernameNormal || !packageName) {
+  notFound();
+} else {
+  const { data: usernameRow, error: usernameError } = await usernamesDto.getByUsernameNormal(supabase, usernameNormal);
+
+  if (usernameError) {
+    Astro.response.status = 500;
+    pageTone = 'error';
+    pageStatus = usernameError.message;
+  } else if (!usernameRow) {
+    notFound();
+  } else {
+    const usernameRecord = usernameRow as UsernameRecord;
+    const usernameDisplay = usernameRecord.username_display || usernameParam;
+    ownerLabel = `@${usernameDisplay}`;
+    ownerSlug = encodeURIComponent(usernameDisplay);
+
+    const ownerProfileId = usernameRecord.profile_id;
+    const ownerOrgId = usernameRecord.org_id;
+
+    if (ownerProfileId && ownerOrgId) {
+      Astro.response.status = 500;
+      pageTone = 'error';
+      pageStatus = 'Username is assigned to multiple owners.';
+    } else if (!ownerProfileId && !ownerOrgId) {
+      notFound();
+    } else {
+      const { data: packageRow, error: packageError } = ownerOrgId
+        ? await packagesDto.getByOrgIdAndName(supabase, ownerOrgId, packageName)
+        : await packagesDto.getByProfileIdAndName(supabase, ownerProfileId ?? '', packageName);
+
+      if (packageError) {
+        Astro.response.status = 500;
+        pageTone = 'error';
+        pageStatus = packageError.message;
+      } else if (!packageRow) {
+        notFound();
+      } else {
+        const packageRecord = packageRow as PackageRecord;
+
+        pkg = {
+          id: packageRecord.id,
+          name: packageRecord.name ?? packageName,
+          repo: packageRecord.repo ?? '',
+          createdAt: packageRecord.created_at ?? '',
+        };
+
+        const { data: versionRows, error: versionError } = await packageVersionsDto.listByPackageId(supabase, pkg.id);
+        if (versionError) {
+          Astro.response.status = 500;
+          pageTone = 'error';
+          pageStatus = versionError.message;
+        } else {
+          versions = ((versionRows as PackageVersionRecord[] | null) ?? [])
+            .map((row) => ({
+              version: row.version ?? '',
+              sha: row.sha ?? '',
+              createdAt: row.created_at ?? '',
+            }));
+        }
+      }
+    }
+  }
+}
+
+const ownerPath = `/${ownerSlug}`;
+const repoUrl = pkg?.repo ? toRepoUrl(pkg.repo) : '';
+---
+
+<RootLayout>
+  <section class="flex justify-center px-4 py-12 md:py-16">
+    <div class="w-full max-w-5xl space-y-6">
+      <header class="space-y-3 text-center">
+        <h1 class="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
+          {pageTone === 'not-found' ? 'Not found' : pkg?.name || packageName}
+        </h1>
+        <p class="mx-auto max-w-3xl text-base text-slate-600">
+          {pageTone === 'not-found' ? 'No package matches that URL.' : (
+            <>
+              Published by <a class="font-semibold text-slate-900 hover:underline" href={ownerPath}>{ownerLabel}</a>
+            </>
+          )}
+        </p>
+        {pkg?.repo && (
+          <p class="text-sm text-slate-600">
+            <span class="font-semibold text-slate-900">Repository:</span>{' '}
+            {repoUrl ? (
+              <a
+                class="font-semibold text-slate-900 hover:underline"
+                href={repoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {pkg.repo}
+              </a>
+            ) : (
+              <span class="font-semibold text-slate-900">{pkg.repo}</span>
+            )}
+          </p>
+        )}
+      </header>
+
+      <div class="w-full space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-col gap-1">
+          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-sky-600">Versions</p>
+          <div class="flex items-center justify-between text-sm text-slate-600">
+            <p class="font-semibold text-slate-900">Published</p>
+            <p>{versions.length} total</p>
+          </div>
+        </div>
+
+        {pageStatus && (
+          <p
+            class:list={{
+              'text-sm font-medium': true,
+              'text-red-600': pageTone === 'error',
+              'text-slate-600': pageTone !== 'error',
+            }}
+          >
+            {pageStatus}
+          </p>
+        )}
+
+        {
+          pageTone !== 'error' && versions.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+              <p class="text-sm font-semibold text-slate-900">
+                {pageTone === 'not-found' ? 'No matching package' : 'No versions yet'}
+              </p>
+              <p class="mt-1 text-sm text-slate-600">
+                {pageTone === 'not-found'
+                  ? 'Double-check the URL and try again.'
+                  : 'This package has not published any versions.'}
+              </p>
+            </div>
+          ) : pageTone === 'error' ? null : (
+            <ul class="divide-y divide-slate-200">
+              {
+                versions.map((v) => (
+                  <li class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="space-y-1">
+                      <p class="text-sm font-semibold text-slate-900">{v.version || 'Unknown version'}</p>
+                      {v.sha && (
+                        toCommitUrl(repoUrl, v.sha) ? (
+                          <a
+                            class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 hover:underline"
+                            href={toCommitUrl(repoUrl, v.sha)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={v.sha}
+                          >
+                            {v.sha.slice(0, 12)}
+                          </a>
+                        ) : (
+                          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500" title={v.sha}>
+                            {v.sha.slice(0, 12)}
+                          </p>
+                        )
+                      )}
+                    </div>
+                    {v.createdAt && (
+                      <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                        <time datetime={v.createdAt}>{new Date(v.createdAt).toLocaleDateString()}</time>
+                      </span>
+                    )}
+                  </li>
+                ))
+              }
+            </ul>
+          )
+        }
+      </div>
+
+      <div class="flex justify-center sm:justify-start">
+        <a
+          class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+          href={ownerPath}
+        >
+          Back to {ownerLabel || 'profile'}
+        </a>
+      </div>
+    </div>
+  </section>
+</RootLayout>
