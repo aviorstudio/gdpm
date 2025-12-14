@@ -7,7 +7,7 @@ Installs Godot addons from GitHub repositories into your project's `addons/` fol
 From `cli/`:
 
 ```sh
-go build -o gdpm ./cmd/gdpm
+go build ./cmd/gdpm
 ```
 
 ## Usage
