@@ -1,11 +1,13 @@
 ---
-	export const prerender = false;
+export const prerender = false;
 
-	import RootLayout from '../../layouts/RootLayout.astro';
-	import PageHeader from '../../components/PageHeader.astro';
-	import { getSessionFromCookies } from '../../lib/auth';
-	import { usernamesDto } from '../../lib/dtoService';
-	import { supabase } from '../../lib/supabase';
+import RootLayout from '../../layouts/RootLayout.astro';
+import Card from '../../components/Card.astro';
+import Title from '../../components/Title.astro';
+import Input from '../../components/Input.astro';
+import { getSessionFromCookies } from '../../lib/auth';
+import { usernamesDto } from '../../lib/dtoService';
+import { supabase } from '../../lib/supabase';
 
 type UsernameRecord = {
   username_display: string | null;
@@ -53,77 +55,64 @@ const email = session.user?.email ?? '';
 const usernameDisplay = usernameRecord.username_display || usernameParam;
 ---
 
-	<RootLayout>
-	  <section class="flex justify-center px-4 py-12 md:py-16">
-	    <div class="w-full max-w-5xl space-y-6">
-	      <header class="flex flex-col gap-4 text-center sm:text-left md:flex-row md:items-end md:justify-between">
-	        <PageHeader title="Settings" subtitle="Manage your profile details. Saving changes isn’t wired up yet." />
-	      </header>
+<RootLayout>
+  <Title title="Settings" subtitle="Manage your profile details. Saving changes isn’t wired up yet." />
 
-	      <div class="w-full space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-	        <div class="grid gap-4 md:grid-cols-2">
-	          <label class="grid gap-1 text-sm font-semibold text-slate-900">
-            Display name
-            <input
-              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              name="name"
-              autocomplete="name"
-              placeholder="Your name"
-              type="text"
-              value={usernameDisplay}
-            />
-          </label>
+  <Card class="flex flex-col gap-5">
+    <div class="grid gap-4 md:grid-cols-2">
+      <Input
+        label="Display name"
+        name="name"
+        autocomplete="name"
+        placeholder="Your name"
+        type="text"
+        value={usernameDisplay}
+      />
 
-          <label class="grid gap-1 text-sm font-semibold text-slate-900">
-            Username
-            <input
-              class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-              name="username"
-              autocomplete="username"
-              placeholder="your-handle"
-              type="text"
-              value={usernameDisplay}
-            />
-          </label>
+      <Input
+        label="Username"
+        name="username"
+        autocomplete="username"
+        placeholder="your-handle"
+        type="text"
+        value={usernameDisplay}
+      />
 
-          <label class="grid gap-1 text-sm font-semibold text-slate-900 md:col-span-2">
-            Email
-            <input
-              class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 shadow-sm"
-              name="email"
-              autocomplete="email"
-              type="email"
-              value={email}
-              readonly
-            />
-          </label>
-        </div>
-
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <a
-            class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-            href={publicPath}
-          >
-            Back
-          </a>
-          <button
-            class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm opacity-60"
-            type="button"
-            disabled
-          >
-            Save changes
-          </button>
-        </div>
-
-        <form class="flex justify-end" action="/api/auth/signout">
-          <button
-            class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-            type="submit"
-          >
-            Sign out
-          </button>
-        </form>
-      </div>
+      <Input
+        label="Email"
+        name="email"
+        autocomplete="email"
+        type="email"
+        value={email}
+        readonly
+        class="bg-slate-50"
+        wrapperClass="md:col-span-2"
+      />
     </div>
-  </section>
+
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <a
+        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        href={publicPath}
+      >
+        Back
+      </a>
+      <button
+        class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm opacity-60"
+        type="button"
+        disabled
+      >
+        Save changes
+      </button>
+    </div>
+
+    <form class="flex justify-end" action="/api/auth/signout">
+      <button
+        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        type="submit"
+      >
+        Sign out
+      </button>
+    </form>
+  </Card>
 </RootLayout>

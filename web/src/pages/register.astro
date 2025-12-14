@@ -1,9 +1,11 @@
 ---
 export const prerender = false;
 
-import AuthLayout from '../layouts/AuthLayout.astro';
-import AuthInput from '../components/AuthInput.astro';
-import ModalDialog from '../components/ModalDialog.astro';
+import RootLayout from '../layouts/RootLayout.astro';
+import AuthForm from '../components/AuthForm.astro';
+import Input from '../components/Input.astro';
+import Dialog from '../components/Dialog.astro';
+import Splash from '../components/Splash.astro';
 import { hasAuthCookies, writeAuthCookies } from '../lib/auth';
 import { profilesDto, usernamesDto } from '../lib/dtoService';
 import { supabase } from '../lib/supabase';
@@ -215,35 +217,40 @@ if (Astro.request.method === 'POST') {
 }
 ---
 
-<AuthLayout mode="register" action="/register" status={status} tone={tone}>
-  <input type="hidden" name="step" value="create" />
+<RootLayout>
+  <Splash />
 
-  <AuthInput label="Username" name="username" autocomplete="username" minlength="3" maxlength="32" value={formUsername} />
+  <AuthForm mode="register" action="/register" status={status} tone={tone}>
+    <input type="hidden" name="step" value="create" hidden />
 
-  <AuthInput label="Email" name="email" type="email" autocomplete="email" value={formEmail} />
+    <Input
+      label="Username"
+      name="username"
+      autocomplete="username"
+      minlength="3"
+      maxlength="32"
+      value={formUsername}
+    />
 
-  <AuthInput
-    label="Password"
-    name="password"
-    type="password"
-    minlength="6"
-    autocomplete="new-password"
-  />
+    <Input label="Email" name="email" type="email" autocomplete="email" value={formEmail} />
+
+    <Input label="Password" name="password" type="password" minlength="6" autocomplete="new-password" />
+  </AuthForm>
 
   {
     showVerification && (
-      <ModalDialog id="register-confirm-dialog" slot="overlay" open title="Confirm your email">
+      <Dialog id="register-confirm-dialog" open title="Confirm your email">
         <Fragment slot="description">
           Enter the 8-digit verification code we sent to{' '}
           <span class="font-semibold text-slate-900">{pendingEmail}</span>.
         </Fragment>
 
-        <form method="post" action="/register" class="space-y-4">
-          <input type="hidden" name="step" value="verify" />
-          <input type="hidden" name="username" value={pendingUsername} />
-          <input type="hidden" name="email" value={pendingEmail} />
+        <form method="post" action="/register" class="flex flex-col gap-4">
+          <input type="hidden" name="step" value="verify" hidden />
+          <input type="hidden" name="username" value={pendingUsername} hidden />
+          <input type="hidden" name="email" value={pendingEmail} hidden />
 
-          <AuthInput
+          <Input
             label="Verification code"
             name="token"
             inputmode="numeric"
@@ -278,7 +285,7 @@ if (Astro.request.method === 'POST') {
             </button>
           </div>
         </form>
-      </ModalDialog>
+      </Dialog>
     )
   }
-</AuthLayout>
+</RootLayout>

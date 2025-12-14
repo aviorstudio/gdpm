@@ -1,6 +1,6 @@
 ---
 import '../styles/global.css';
-import AppHeader from '../components/AppHeader.astro';
+import Nav from '../components/Nav.astro';
 ---
 
 <!doctype html>
@@ -13,8 +13,8 @@ import AppHeader from '../components/AppHeader.astro';
 		<title>GDPM | Supabase Auth</title>
 	</head>
 	<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
-		<AppHeader />
-		<main>
+		<Nav />
+		<main class="flex flex-col gap-10 py-12 md:gap-12 md:py-16">
 			<slot />
 		</main>
 	</body>

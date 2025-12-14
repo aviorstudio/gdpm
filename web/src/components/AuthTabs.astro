@@ -1,0 +1,34 @@
+---
+interface Props {
+	mode: 'signin' | 'register';
+}
+
+const { mode } = Astro.props as Props;
+
+const tabBaseClasses = 'rounded-full px-4 py-2 text-sm font-semibold transition';
+---
+
+<div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 p-1">
+	<a
+		class:list={{
+			[tabBaseClasses]: true,
+			'bg-white text-slate-900 shadow-sm': mode === 'signin',
+			'text-slate-600 hover:text-slate-800': mode !== 'signin',
+		}}
+		href="/signin"
+		aria-current={mode === 'signin' ? 'page' : undefined}
+	>
+		Sign in
+	</a>
+	<a
+		class:list={{
+			[tabBaseClasses]: true,
+			'bg-white text-slate-900 shadow-sm': mode === 'register',
+			'text-slate-600 hover:text-slate-800': mode !== 'register',
+		}}
+		href="/register"
+		aria-current={mode === 'register' ? 'page' : undefined}
+	>
+		Create account
+	</a>
+</div>

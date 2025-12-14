@@ -1,8 +1,10 @@
 ---
 export const prerender = false;
 
-import AuthLayout from '../layouts/AuthLayout.astro';
-import AuthInput from '../components/AuthInput.astro';
+import RootLayout from '../layouts/RootLayout.astro';
+import AuthForm from '../components/AuthForm.astro';
+import Input from '../components/Input.astro';
+import Splash from '../components/Splash.astro';
 import { hasAuthCookies } from '../lib/auth';
 
 if (hasAuthCookies(Astro.cookies)) {
@@ -10,13 +12,10 @@ if (hasAuthCookies(Astro.cookies)) {
 }
 ---
 
-<AuthLayout mode="signin">
-	<AuthInput label="Email" name="email" type="email" autocomplete="email" />
-
-	<AuthInput
-		label="Password"
-		name="password"
-		type="password"
-		autocomplete="current-password"
-	/>
-</AuthLayout>
+<RootLayout>
+	<Splash />
+	<AuthForm mode="signin">
+		<Input label="Email" name="email" type="email" autocomplete="email" />
+		<Input label="Password" name="password" type="password" autocomplete="current-password" />
+	</AuthForm>
+</RootLayout>
