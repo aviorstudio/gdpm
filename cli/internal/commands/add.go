@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
-	"time"
+	"strings"
 
 	"github.com/aviorstudio/gdpm/cli/internal/fsutil"
+	"github.com/aviorstudio/gdpm/cli/internal/gdpmdb"
 	"github.com/aviorstudio/gdpm/cli/internal/githubapi"
 	"github.com/aviorstudio/gdpm/cli/internal/manifest"
 	"github.com/aviorstudio/gdpm/cli/internal/project"
@@ -21,7 +21,7 @@ type AddOptions struct {
 
 func Add(ctx context.Context, opts AddOptions) error {
 	if opts.Spec == "" {
-		return fmt.Errorf("%w: missing package spec", ErrUserInput)
+		return fmt.Errorf("%w: missing plugin spec", ErrUserInput)
 	}
 
 	startDir, err := os.Getwd()
@@ -48,10 +48,11 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
 
-	client := githubapi.NewClient(os.Getenv("GITHUB_TOKEN"))
-	ref, sha, err := client.ResolveRefAndSHA(ctx, pkg.Owner, pkg.Repo, pkg.Version)
+	db := gdpmdb.NewDefaultClient()
+
+	resolved, err := db.ResolvePlugin(ctx, pkg.Owner, pkg.Repo, pkg.Version)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "gdpm-add-*")
@@ -61,7 +62,8 @@ func Add(ctx context.Context, opts AddOptions) error {
 	defer os.RemoveAll(tmpDir)
 
 	zipPath := filepath.Join(tmpDir, "repo.zip")
-	if err := client.DownloadZipball(ctx, pkg.Owner, pkg.Repo, sha, zipPath); err != nil {
+	gh := githubapi.NewClient(os.Getenv("GITHUB_TOKEN"))
+	if err := gh.DownloadZipball(ctx, resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA, zipPath); err != nil {
 		return err
 	}
 
@@ -71,84 +73,56 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return err
 	}
 
-	remoteAddonsDir := filepath.Join(rootDir, "addons")
-	remoteEntries, err := os.ReadDir(remoteAddonsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("repo %s has no top-level addons/ directory at %s", pkg.RepoPath(), ref)
-		}
-		return err
-	}
-	if len(remoteEntries) == 0 {
-		return fmt.Errorf("repo %s has an empty addons/ directory at %s", pkg.RepoPath(), ref)
-	}
-
-	existing, existingIdx := manifest.FindPackage(m, pkg.Name())
-	if existingIdx >= 0 {
-		if err := removeInstalledPaths(projectDir, existing.InstalledPaths, true); err != nil {
-			return err
-		}
-	}
-
 	localAddonsDir := filepath.Join(projectDir, "addons")
 	if err := os.MkdirAll(localAddonsDir, 0o755); err != nil {
 		return err
 	}
 
-	var installed []string
-	for _, entry := range remoteEntries {
-		rel := path.Join("addons", entry.Name())
-		if _, other := manifest.PathOwner(m, rel, pkg.Name()); other != "" {
-			return fmt.Errorf("%w: path %s is already managed by %s", ErrUserInput, rel, other)
-		}
+	addonDirName := strings.ReplaceAll(pkg.Name(), "/", "_")
+	if err := validateAddonDirName(addonDirName); err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	}
 
-		src := filepath.Join(remoteAddonsDir, entry.Name())
-		dst := filepath.Join(localAddonsDir, entry.Name())
+	rel := filepath.Join("addons", addonDirName)
+	for otherName := range m.Plugins {
+		if otherName == pkg.Name() {
+			continue
+		}
+		parsed, err := spec.ParsePackageSpec(otherName)
+		if err != nil {
+			return fmt.Errorf("invalid plugin in gdpm.json: %s", otherName)
+		}
+		otherAddonDirName := strings.ReplaceAll(parsed.Name(), "/", "_")
+		if otherAddonDirName == addonDirName {
+			return fmt.Errorf("%w: path %s is already managed by %s", ErrUserInput, rel, otherName)
+		}
+	}
+
+	dst := filepath.Join(localAddonsDir, addonDirName)
+	if manifest.HasPlugin(m, pkg.Name()) {
+		if err := fsutil.RemoveAll(dst); err != nil {
+			return err
+		}
+	} else {
 		if _, err := os.Lstat(dst); err == nil {
 			return fmt.Errorf("%w: destination already exists: %s", ErrUserInput, dst)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
-
-		if err := fsutil.CopyPath(src, dst); err != nil {
-			return err
-		}
-		installed = append(installed, rel)
 	}
 
-	entry := manifest.Package{
-		Name:           pkg.Name(),
-		Repo:           pkg.RepoPath(),
-		Version:        ref,
-		SHA:            sha,
-		InstalledPaths: installed,
-		InstalledAt:    time.Now().UTC().Format(time.RFC3339),
+	if err := fsutil.CopyPath(rootDir, dst); err != nil {
+		return err
 	}
-	m = manifest.UpsertPackage(m, entry)
+
+	m = manifest.UpsertPlugin(m, pkg.Name(), manifest.Plugin{
+		Repo:    gdpmdb.GitHubTreeURL(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA),
+		Version: resolved.Version,
+	})
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
 	}
 
-	fmt.Printf("installed %s@%s (%s)\n", pkg.Name(), ref, sha)
-	return nil
-}
-
-func removeInstalledPaths(projectDir string, relPaths []string, allowMissing bool) error {
-	for _, rel := range relPaths {
-		ok, err := manifest.IsSafeInstalledPath(rel)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("refusing to remove non-addons path: %s", rel)
-		}
-		abs := filepath.Join(projectDir, filepath.FromSlash(rel))
-		if err := fsutil.RemoveAll(abs); err != nil {
-			if allowMissing && os.IsNotExist(err) {
-				continue
-			}
-			return err
-		}
-	}
+	fmt.Printf("installed %s@%s (%s)\n", pkg.Name(), resolved.Version, resolved.SHA)
 	return nil
 }

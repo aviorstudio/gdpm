@@ -14,10 +14,15 @@ go build ./cmd/gdpm
 
 ```sh
 gdpm init
-gdpm add @owner/repo@1.2.3
-gdpm add @owner/repo
-gdpm remove @owner/repo
+gdpm add @username/plugin@1.2.3
+gdpm add @username/plugin
+gdpm remove @username/plugin
+```
+
+`gdpm.json` uses:
+
+```json
+{ "schemaVersion": "0.0.1", "plugins": { "@user/plugin": { "repo": "https://github.com/owner/repo/tree/<sha>", "version": "1.2.3" } } }
 ```
 
 If you hit GitHub rate limits, set `GITHUB_TOKEN`.
-

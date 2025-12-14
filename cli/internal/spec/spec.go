@@ -45,7 +45,7 @@ func ParsePackageSpec(s string) (PackageSpec, error) {
 	}
 
 	spec := PackageSpec{
-		Owner: repoBits[0],
+		Owner: strings.ToLower(repoBits[0]),
 		Repo:  repoBits[1],
 	}
 	if len(parts) == 2 {

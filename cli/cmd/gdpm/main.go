@@ -67,7 +67,7 @@ func runAdd(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: gdpm add @owner/repo[@version]")
+		fmt.Fprintln(os.Stderr, "usage: gdpm add @username/plugin[@version]")
 		return 2
 	}
 
@@ -94,7 +94,7 @@ func runRemove(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: gdpm remove @owner/repo")
+		fmt.Fprintln(os.Stderr, "usage: gdpm remove @username/plugin")
 		return 2
 	}
 
@@ -119,8 +119,8 @@ func printUsage() {
 
 Usage:
   gdpm init
-  gdpm add @owner/repo[@version]     # version is a tag like 1.2.3 or v1.2.3
-  gdpm remove @owner/repo
+  gdpm add @username/plugin[@version]
+  gdpm remove @username/plugin
 
 Environment:
   GITHUB_TOKEN   Optional GitHub token to avoid rate limits.`)

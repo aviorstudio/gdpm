@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/aviorstudio/gdpm/cli/internal/fsutil"
 	"github.com/aviorstudio/gdpm/cli/internal/manifest"
 	"github.com/aviorstudio/gdpm/cli/internal/project"
 	"github.com/aviorstudio/gdpm/cli/internal/spec"
@@ -19,7 +21,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	_ = ctx
 
 	if opts.Spec == "" {
-		return fmt.Errorf("%w: missing package spec", ErrUserInput)
+		return fmt.Errorf("%w: missing plugin spec", ErrUserInput)
 	}
 
 	startDir, err := os.Getwd()
@@ -43,19 +45,24 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
 	if pkg.Version != "" {
-		return fmt.Errorf("%w: remove does not take a version (use @owner/repo)", ErrUserInput)
+		return fmt.Errorf("%w: remove does not take a version (use @username/plugin)", ErrUserInput)
 	}
 
-	existing, idx := manifest.FindPackage(m, pkg.Name())
-	if idx < 0 {
-		return fmt.Errorf("%w: package not found in gdpm.json: %s", ErrUserInput, pkg.Name())
+	if !manifest.HasPlugin(m, pkg.Name()) {
+		return fmt.Errorf("%w: plugin not found in gdpm.json: %s", ErrUserInput, pkg.Name())
 	}
 
-	if err := removeInstalledPaths(projectDir, existing.InstalledPaths, true); err != nil {
+	addonDirName := strings.ReplaceAll(pkg.Name(), "/", "_")
+	if err := validateAddonDirName(addonDirName); err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	}
+
+	dst := filepath.Join(projectDir, "addons", addonDirName)
+	if err := fsutil.RemoveAll(dst); err != nil {
 		return err
 	}
 
-	m = manifest.RemovePackage(m, pkg.Name())
+	m = manifest.RemovePlugin(m, pkg.Name())
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
 	}
