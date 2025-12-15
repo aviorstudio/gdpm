@@ -22,6 +22,19 @@ type LinkOptions struct {
 func Link(ctx context.Context, opts LinkOptions) error {
 	_ = ctx
 
+	specInput := strings.TrimSpace(opts.Spec)
+	if specInput == "" {
+		return fmt.Errorf("%w: missing plugin spec", ErrUserInput)
+	}
+	pkg, err := spec.ParsePackageSpec(specInput)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	}
+	if pkg.Version != "" {
+		return fmt.Errorf("%w: link does not take a version (use @username/plugin)", ErrUserInput)
+	}
+	pluginKey := pkg.Name()
+
 	pathInput := strings.TrimSpace(opts.Path)
 	if pathInput == "" {
 		return fmt.Errorf("%w: missing local path", ErrUserInput)
@@ -42,6 +55,8 @@ func Link(ctx context.Context, opts LinkOptions) error {
 	if err != nil {
 		return err
 	}
+
+	plugin := m.Plugins[pluginKey]
 
 	expanded, err := fsutil.ExpandHome(pathInput)
 	if err != nil {
@@ -65,35 +80,6 @@ func Link(ctx context.Context, opts LinkOptions) error {
 		return fmt.Errorf("%w: plugin.cfg not found at %s (pass the addon directory that contains plugin.cfg)", ErrUserInput, filepath.Join(abs, "plugin.cfg"))
 	}
 
-	var pluginKey string
-	if strings.TrimSpace(opts.Spec) == "" {
-		baseName := strings.TrimSpace(filepath.Base(abs))
-		baseName = strings.TrimPrefix(baseName, "@")
-		baseName = strings.ReplaceAll(baseName, " ", "_")
-		pluginKey = "@" + baseName
-		if !strings.HasPrefix(pluginKey, "@") || pluginKey == "@" {
-			return fmt.Errorf("%w: failed to derive plugin name from path: %s", ErrUserInput, abs)
-		}
-		if manifest.HasPlugin(m, pluginKey) {
-			return fmt.Errorf("%w: plugin already exists in gdpm.json: %s (run `gdpm unlink %s` first)", ErrUserInput, pluginKey, pluginKey)
-		}
-	} else {
-		pkg, err := spec.ParsePackageSpec(opts.Spec)
-		if err != nil {
-			return fmt.Errorf("%w: %v", ErrUserInput, err)
-		}
-		if pkg.Version != "" {
-			return fmt.Errorf("%w: link does not take a version (use @username/plugin)", ErrUserInput)
-		}
-		pluginKey = pkg.Name()
-		if !manifest.HasPlugin(m, pluginKey) {
-			return fmt.Errorf("%w: plugin not found in gdpm.json: %s", ErrUserInput, pluginKey)
-		}
-		if strings.TrimSpace(m.Plugins[pluginKey].Repo) == "" {
-			return fmt.Errorf("%w: plugin has no repo in gdpm.json: %s", ErrUserInput, pluginKey)
-		}
-	}
-
 	addonDirName, err := addonDirNameForPluginKey(pluginKey)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
@@ -108,16 +94,8 @@ func Link(ctx context.Context, opts LinkOptions) error {
 	}
 
 	dst := filepath.Join(localAddonsDir, addonDirName)
-	if strings.TrimSpace(opts.Spec) == "" {
-		if _, err := os.Lstat(dst); err == nil {
-			return fmt.Errorf("%w: destination already exists: %s", ErrUserInput, dst)
-		} else if !os.IsNotExist(err) {
-			return err
-		}
-	} else {
-		if err := fsutil.RemoveAll(dst); err != nil {
-			return err
-		}
+	if err := fsutil.RemoveAll(dst); err != nil {
+		return err
 	}
 
 	if err := fsutil.SymlinkDir(abs, dst); err != nil {
@@ -137,8 +115,7 @@ func Link(ctx context.Context, opts LinkOptions) error {
 		return err
 	}
 
-	plugin := m.Plugins[pluginKey]
-	plugin.Path = storedPath
+	plugin.Link = storedPath
 	m = manifest.UpsertPlugin(m, pluginKey, plugin)
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
@@ -147,6 +124,9 @@ func Link(ctx context.Context, opts LinkOptions) error {
 	projectGodotPath := filepath.Join(projectDir, "project.godot")
 	if _, err := os.Stat(projectGodotPath); err == nil {
 		pluginCfgResPath := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+		if err := disableEditorPluginAliases(projectGodotPath, projectDir, m, pluginKey, addonDirName, abs); err != nil {
+			return err
+		}
 		updated, err := project.SetEditorPluginEnabled(projectGodotPath, pluginCfgResPath, true)
 		if err != nil {
 			return err
@@ -160,4 +140,115 @@ func Link(ctx context.Context, opts LinkOptions) error {
 
 	fmt.Printf("linked %s -> %s\n", pluginKey, storedPath)
 	return nil
+}
+
+func disableEditorPluginAliases(projectGodotPath, projectDir string, m manifest.Manifest, pluginKey, addonDirName, abs string) error {
+	absResolved := filepath.Clean(abs)
+	if resolved, err := filepath.EvalSymlinks(absResolved); err == nil {
+		absResolved = filepath.Clean(resolved)
+	}
+
+	if legacyKey := legacyPluginKeyFromLocalPath(absResolved); legacyKey != "" && legacyKey != pluginKey {
+		legacyAddonDirName, err := addonDirNameForPluginKey(legacyKey)
+		if err == nil && legacyAddonDirName != "" && legacyAddonDirName != addonDirName {
+			legacyPluginCfgResPath := "res://" + path.Join("addons", legacyAddonDirName, "plugin.cfg")
+			if _, err := project.SetEditorPluginEnabled(projectGodotPath, legacyPluginCfgResPath, false); err != nil {
+				return err
+			}
+		}
+	}
+
+	for otherKey, otherPlugin := range m.Plugins {
+		if otherKey == pluginKey {
+			continue
+		}
+		if strings.TrimSpace(otherPlugin.Link) == "" {
+			continue
+		}
+
+		otherAbs, err := pluginAbsPath(projectDir, otherPlugin.Link)
+		if err != nil {
+			continue
+		}
+		otherResolved := filepath.Clean(otherAbs)
+		if resolved, err := filepath.EvalSymlinks(otherResolved); err == nil {
+			otherResolved = filepath.Clean(resolved)
+		}
+		if otherResolved != absResolved {
+			continue
+		}
+
+		otherAddonDirName, err := addonDirNameForPluginKey(otherKey)
+		if err != nil {
+			continue
+		}
+		if otherAddonDirName == addonDirName {
+			continue
+		}
+
+		otherPluginCfgResPath := "res://" + path.Join("addons", otherAddonDirName, "plugin.cfg")
+		if _, err := project.SetEditorPluginEnabled(projectGodotPath, otherPluginCfgResPath, false); err != nil {
+			return err
+		}
+	}
+
+	addonsDir := filepath.Join(projectDir, "addons")
+	entries, err := os.ReadDir(addonsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == addonDirName {
+			continue
+		}
+		entryPath := filepath.Join(addonsDir, name)
+
+		resolved, err := filepath.EvalSymlinks(entryPath)
+		if err != nil {
+			continue
+		}
+		if filepath.Clean(resolved) != absResolved {
+			continue
+		}
+
+		legacyPluginCfgResPath := "res://" + path.Join("addons", name, "plugin.cfg")
+		if _, err := project.SetEditorPluginEnabled(projectGodotPath, legacyPluginCfgResPath, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func legacyPluginKeyFromLocalPath(absDir string) string {
+	baseName := strings.TrimSpace(filepath.Base(absDir))
+	baseName = strings.TrimPrefix(baseName, "@")
+	baseName = strings.ReplaceAll(baseName, " ", "_")
+	if baseName == "" {
+		return ""
+	}
+	return "@" + baseName
+}
+
+func pluginAbsPath(projectDir, p string) (string, error) {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "", nil
+	}
+
+	expanded, err := fsutil.ExpandHome(p)
+	if err != nil {
+		return "", err
+	}
+	if expanded == "" {
+		return "", nil
+	}
+	if !filepath.IsAbs(expanded) {
+		expanded = filepath.Join(projectDir, expanded)
+	}
+	return filepath.Abs(expanded)
 }

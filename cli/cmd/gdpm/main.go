@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aviorstudio/gdpm/cli/internal/commands"
@@ -126,24 +125,17 @@ func runLink(args []string) int {
 		return 2
 	}
 
-	if fs.NArg() != 1 && fs.NArg() != 2 {
-		fmt.Fprintln(os.Stderr, "usage: gdpm link @username/plugin <local_path> | gdpm link <local_path>")
-		return 2
-	}
-	if fs.NArg() == 1 && strings.HasPrefix(fs.Arg(0), "@") {
-		fmt.Fprintln(os.Stderr, "usage: gdpm link @username/plugin <local_path> | gdpm link <local_path>")
+	if fs.NArg() != 2 {
+		fmt.Fprintln(os.Stderr, "usage: gdpm link @username/plugin <local_path>")
 		return 2
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	var opts commands.LinkOptions
-	if fs.NArg() == 1 {
-		opts.Path = fs.Arg(0)
-	} else {
-		opts.Spec = fs.Arg(0)
-		opts.Path = fs.Arg(1)
+	opts := commands.LinkOptions{
+		Spec: fs.Arg(0),
+		Path: fs.Arg(1),
 	}
 
 	if err := commands.Link(ctx, opts); err != nil {
@@ -192,7 +184,6 @@ Usage:
   gdpm add @username/plugin[@version]
   gdpm remove @username/plugin
   gdpm link @username/plugin <local_path>
-  gdpm link <local_path>
   gdpm unlink @username/plugin
   gdpm unlink @name
 

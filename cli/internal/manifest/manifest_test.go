@@ -32,12 +32,28 @@ func TestLoadLegacySchemaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(string(b), `"schemaVersion": "0.0.2"`) {
-		t.Fatalf("expected saved file to upgrade schemaVersion to 0.0.2, got:\n%s", string(b))
+	if !strings.Contains(string(b), `"schemaVersion": "0.0.3"`) {
+		t.Fatalf("expected saved file to upgrade schemaVersion to 0.0.3, got:\n%s", string(b))
 	}
 }
 
-func TestLoadCurrentSchemaVersionWithPath(t *testing.T) {
+func TestLoadCurrentSchemaVersionWithLink(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "gdpm.json")
+	if err := os.WriteFile(p, []byte(`{"schemaVersion":"0.0.3","plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","link":"~/dev/plugin"}}}`), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	m, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := m.Plugins["@user/plugin"].Link; got != "~/dev/plugin" {
+		t.Fatalf("expected link=~/dev/plugin, got %q", got)
+	}
+}
+
+func TestLoadSchemaVersionWithPath_MapsToLink(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "gdpm.json")
 	if err := os.WriteFile(p, []byte(`{"schemaVersion":"0.0.2","plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","path":"~/dev/plugin"}}}`), 0o644); err != nil {
@@ -48,8 +64,8 @@ func TestLoadCurrentSchemaVersionWithPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got := m.Plugins["@user/plugin"].Path; got != "~/dev/plugin" {
-		t.Fatalf("expected path=~/dev/plugin, got %q", got)
+	if got := m.Plugins["@user/plugin"].Link; got != "~/dev/plugin" {
+		t.Fatalf("expected link=~/dev/plugin, got %q", got)
 	}
 }
 

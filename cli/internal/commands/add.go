@@ -50,7 +50,7 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
 
-	if existing, ok := m.Plugins[pkg.Name()]; ok && strings.TrimSpace(existing.Path) != "" && !opts.AllowLinked {
+	if existing, ok := m.Plugins[pkg.Name()]; ok && strings.TrimSpace(existing.Link) != "" && !opts.AllowLinked {
 		return fmt.Errorf("%w: plugin is linked (run `gdpm unlink %s` first)", ErrUserInput, pkg.Name())
 	}
 
@@ -128,7 +128,7 @@ func Add(ctx context.Context, opts AddOptions) error {
 	m = manifest.UpsertPlugin(m, pkg.Name(), manifest.Plugin{
 		Repo:    gdpmdb.GitHubTreeURL(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA),
 		Version: resolved.Version,
-		Path:    "",
+		Link:    "",
 	})
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err

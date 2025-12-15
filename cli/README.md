@@ -20,24 +20,25 @@ gdpm add @username/plugin@1.2.3
 gdpm add @username/plugin
 gdpm remove @username/plugin
 gdpm link @username/plugin /absolute/path/to/addons/dir
-gdpm link /absolute/path/to/addons/dir
 gdpm unlink @username/plugin
 gdpm unlink @name
 ```
+
+`gdpm link` will create a plugin entry in `gdpm.json` if it doesn't exist yet (as a local-only plugin, without a `repo`).
 
 `gdpm.json` uses:
 
 ```json
 {
-  "schemaVersion": "0.0.2",
+  "schemaVersion": "0.0.3",
   "plugins": {
     "@user/plugin": {
       "repo": "https://github.com/owner/repo/tree/<sha>",
       "version": "1.2.3",
-      "path": "~/dev/plugin"
+      "link": "~/dev/plugin"
     },
-    "@local_plugin": {
-      "path": "~/dev/local_plugin"
+    "@user/other": {
+      "link": "~/dev/other"
     }
   }
 }

@@ -66,7 +66,7 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 	if !ok {
 		return fmt.Errorf("%w: plugin not found in gdpm.json: %s", ErrUserInput, pluginKey)
 	}
-	if strings.TrimSpace(plugin.Path) == "" {
+	if strings.TrimSpace(plugin.Link) == "" {
 		return fmt.Errorf("%w: plugin is not linked: %s", ErrUserInput, pluginKey)
 	}
 
@@ -153,7 +153,7 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 		return fmt.Errorf("%w: installed addon is missing plugin.cfg at %s", ErrUserInput, filepath.Join(dst, "plugin.cfg"))
 	}
 
-	plugin.Path = ""
+	plugin.Link = ""
 	m = manifest.UpsertPlugin(m, pluginKey, plugin)
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
