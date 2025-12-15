@@ -16,14 +16,17 @@ import (
 	"github.com/aviorstudio/gdpm/cli/internal/spec"
 )
 
-type AddOptions struct {
-	Spec        string
-	AllowLinked bool
+type UnlinkOptions struct {
+	Spec string
 }
 
-func Add(ctx context.Context, opts AddOptions) error {
-	if opts.Spec == "" {
+func Unlink(ctx context.Context, opts UnlinkOptions) error {
+	specInput := strings.TrimSpace(opts.Spec)
+	if specInput == "" {
 		return fmt.Errorf("%w: missing plugin spec", ErrUserInput)
+	}
+	if !strings.HasPrefix(specInput, "@") {
+		return fmt.Errorf("%w: spec must start with @ (got %q)", ErrUserInput, specInput)
 	}
 
 	startDir, err := os.Getwd()
@@ -33,9 +36,6 @@ func Add(ctx context.Context, opts AddOptions) error {
 
 	projectDir, ok := project.FindManifestDir(startDir)
 	if !ok {
-		if godotDir, ok := project.FindGodotProjectDir(startDir); ok {
-			return fmt.Errorf("%w: no gdpm.json found (run `gdpm init` in %s)", ErrUserInput, godotDir)
-		}
 		return fmt.Errorf("%w: no gdpm.json found (run `gdpm init`)", ErrUserInput)
 	}
 
@@ -45,23 +45,69 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return err
 	}
 
-	pkg, err := spec.ParsePackageSpec(opts.Spec)
+	var pluginKey string
+	if strings.Contains(specInput, "/") {
+		pkg, err := spec.ParsePackageSpec(specInput)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrUserInput, err)
+		}
+		if pkg.Version != "" {
+			return fmt.Errorf("%w: unlink does not take a version (use @username/plugin)", ErrUserInput)
+		}
+		pluginKey = pkg.Name()
+	} else {
+		if strings.Count(specInput, "@") > 1 {
+			return fmt.Errorf("%w: invalid plugin name %q", ErrUserInput, specInput)
+		}
+		pluginKey = specInput
+	}
+
+	plugin, ok := m.Plugins[pluginKey]
+	if !ok {
+		return fmt.Errorf("%w: plugin not found in gdpm.json: %s", ErrUserInput, pluginKey)
+	}
+	if strings.TrimSpace(plugin.Link) == "" {
+		return fmt.Errorf("%w: plugin is not linked: %s", ErrUserInput, pluginKey)
+	}
+
+	addonDirName, err := addonDirNameForPluginKey(pluginKey)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
+	dst := filepath.Join(projectDir, "addons", addonDirName)
 
-	if existing, ok := m.Plugins[pkg.Name()]; ok && strings.TrimSpace(existing.Link) != "" && !opts.AllowLinked {
-		return fmt.Errorf("%w: plugin is linked (run `gdpm unlink %s` first)", ErrUserInput, pkg.Name())
+	if strings.TrimSpace(plugin.Repo) == "" {
+		projectGodotPath := filepath.Join(projectDir, "project.godot")
+		if _, err := os.Stat(projectGodotPath); err == nil {
+			pluginCfgResPath := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+			updated, err := project.SetEditorPluginEnabled(projectGodotPath, pluginCfgResPath, false)
+			if err != nil {
+				return err
+			}
+			if updated {
+				fmt.Printf("disabled %s\n", pluginCfgResPath)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+
+		if err := fsutil.RemoveAll(dst); err != nil {
+			return err
+		}
+		m = manifest.RemovePlugin(m, pluginKey)
+		if err := manifest.Save(manifestPath, m); err != nil {
+			return err
+		}
+		fmt.Printf("unlinked %s\n", pluginKey)
+		return nil
 	}
 
-	db := gdpmdb.NewDefaultClient()
-
-	resolved, err := db.ResolvePlugin(ctx, pkg.Owner, pkg.Repo, pkg.Version)
+	ghOwner, ghRepo, ref, err := gdpmdb.ParseGitHubTreeURL(plugin.Repo)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUserInput, err)
+		return err
 	}
 
-	tmpDir, err := os.MkdirTemp("", "gdpm-add-*")
+	tmpDir, err := os.MkdirTemp("", "gdpm-unlink-*")
 	if err != nil {
 		return err
 	}
@@ -69,27 +115,13 @@ func Add(ctx context.Context, opts AddOptions) error {
 
 	zipPath := filepath.Join(tmpDir, "repo.zip")
 	gh := githubapi.NewClient(os.Getenv("GITHUB_TOKEN"))
-	if err := gh.DownloadZipball(ctx, resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA, zipPath); err != nil {
+	if err := gh.DownloadZipball(ctx, ghOwner, ghRepo, ref, zipPath); err != nil {
 		return err
 	}
 
 	extractDir := filepath.Join(tmpDir, "extract")
 	rootDir, err := fsutil.ExtractZip(zipPath, extractDir)
 	if err != nil {
-		return err
-	}
-
-	localAddonsDir := filepath.Join(projectDir, "addons")
-	if err := os.MkdirAll(localAddonsDir, 0o755); err != nil {
-		return err
-	}
-
-	addonDirName, err := addonDirNameForPluginKey(pkg.Name())
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUserInput, err)
-	}
-
-	if err := validateNoAddonDirCollision(m, pkg.Name(), addonDirName); err != nil {
 		return err
 	}
 
@@ -100,17 +132,13 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return fmt.Errorf("%w: package is missing plugin.cfg at repository root (expected to install it to %s)", ErrUserInput, expected)
 	}
 
-	dst := filepath.Join(localAddonsDir, addonDirName)
-	if manifest.HasPlugin(m, pkg.Name()) {
-		if err := fsutil.RemoveAll(dst); err != nil {
-			return err
-		}
-	} else {
-		if _, err := os.Lstat(dst); err == nil {
-			return fmt.Errorf("%w: destination already exists: %s", ErrUserInput, dst)
-		} else if !os.IsNotExist(err) {
-			return err
-		}
+	localAddonsDir := filepath.Join(projectDir, "addons")
+	if err := os.MkdirAll(localAddonsDir, 0o755); err != nil {
+		return err
+	}
+
+	if err := fsutil.RemoveAll(dst); err != nil {
+		return err
 	}
 
 	if err := fsutil.CopyPath(rootDir, dst); err != nil {
@@ -125,11 +153,8 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return fmt.Errorf("%w: installed addon is missing plugin.cfg at %s", ErrUserInput, filepath.Join(dst, "plugin.cfg"))
 	}
 
-	m = manifest.UpsertPlugin(m, pkg.Name(), manifest.Plugin{
-		Repo:    gdpmdb.GitHubTreeURL(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA),
-		Version: resolved.Version,
-		Link:    "",
-	})
+	plugin.Link = ""
+	m = manifest.UpsertPlugin(m, pluginKey, plugin)
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
 	}
@@ -148,6 +173,6 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return err
 	}
 
-	fmt.Printf("installed %s@%s (%s)\n", pkg.Name(), resolved.Version, resolved.SHA)
+	fmt.Printf("unlinked %s\n", pluginKey)
 	return nil
 }

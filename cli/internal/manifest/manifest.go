@@ -9,7 +9,9 @@ import (
 	"github.com/aviorstudio/gdpm/cli/internal/fsutil"
 )
 
-const SchemaVersion = "0.0.1"
+const SchemaVersionLegacy = "0.0.1"
+const SchemaVersionPath = "0.0.2"
+const SchemaVersionCurrent = "0.0.3"
 
 type Manifest struct {
 	SchemaVersion string            `json:"schemaVersion"`
@@ -17,13 +19,52 @@ type Manifest struct {
 }
 
 type Plugin struct {
-	Repo    string `json:"repo"`
-	Version string `json:"version"`
+	Repo    string `json:"repo,omitempty"`
+	Version string `json:"version,omitempty"`
+	Link    string `json:"link,omitempty"`
+}
+
+func (p *Plugin) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for k := range raw {
+		switch k {
+		case "repo", "version", "link", "path":
+		default:
+			return fmt.Errorf("unknown field %q", k)
+		}
+	}
+
+	var tmp struct {
+		Repo    string `json:"repo,omitempty"`
+		Version string `json:"version,omitempty"`
+		Link    string `json:"link,omitempty"`
+		Path    string `json:"path,omitempty"`
+	}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	link := tmp.Link
+	if link == "" {
+		link = tmp.Path
+	} else if tmp.Path != "" && tmp.Path != tmp.Link {
+		return fmt.Errorf("plugin has both link %q and path %q", tmp.Link, tmp.Path)
+	}
+
+	*p = Plugin{
+		Repo:    tmp.Repo,
+		Version: tmp.Version,
+		Link:    link,
+	}
+	return nil
 }
 
 func New() Manifest {
 	return Manifest{
-		SchemaVersion: SchemaVersion,
+		SchemaVersion: SchemaVersionCurrent,
 		Plugins:       map[string]Plugin{},
 	}
 }
@@ -41,10 +82,10 @@ func Load(path string) (Manifest, error) {
 		return Manifest{}, err
 	}
 	if m.SchemaVersion == "" {
-		m.SchemaVersion = SchemaVersion
+		m.SchemaVersion = SchemaVersionLegacy
 	}
-	if m.SchemaVersion != SchemaVersion {
-		return Manifest{}, fmt.Errorf("unsupported gdpm.json schemaVersion %q (expected %q)", m.SchemaVersion, SchemaVersion)
+	if m.SchemaVersion != SchemaVersionLegacy && m.SchemaVersion != SchemaVersionPath && m.SchemaVersion != SchemaVersionCurrent {
+		return Manifest{}, fmt.Errorf("unsupported gdpm.json schemaVersion %q (expected %q, %q, or %q)", m.SchemaVersion, SchemaVersionLegacy, SchemaVersionPath, SchemaVersionCurrent)
 	}
 	if m.Plugins == nil {
 		m.Plugins = map[string]Plugin{}
@@ -56,6 +97,7 @@ func Save(path string, m Manifest) error {
 	if m.Plugins == nil {
 		m.Plugins = map[string]Plugin{}
 	}
+	m.SchemaVersion = SchemaVersionCurrent
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
