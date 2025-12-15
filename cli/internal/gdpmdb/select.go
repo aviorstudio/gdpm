@@ -9,12 +9,15 @@ import (
 func selectVersion(rows []versionRow, requested string) (versionRow, bool) {
 	requested = strings.TrimSpace(requested)
 	if requested != "" {
-		reqNorm := normalizeVersion(requested)
+		reqVer, ok := semver.Parse(requested)
+		if !ok || len(reqVer.Pre) > 0 {
+			return versionRow{}, false
+		}
 		for _, row := range rows {
-			if strings.TrimSpace(row.SHA) == "" || strings.TrimSpace(row.Version) == "" {
+			if strings.TrimSpace(row.SHA) == "" {
 				continue
 			}
-			if normalizeVersion(row.Version) == reqNorm {
+			if row.Major == reqVer.Major && row.Minor == reqVer.Minor && row.Patch == reqVer.Patch {
 				return row, true
 			}
 		}
@@ -22,20 +25,17 @@ func selectVersion(rows []versionRow, requested string) (versionRow, bool) {
 	}
 
 	var best versionRow
-	var bestVer semver.Version
 	var bestSet bool
 
 	for _, row := range rows {
-		if strings.TrimSpace(row.SHA) == "" || strings.TrimSpace(row.Version) == "" {
+		if strings.TrimSpace(row.SHA) == "" {
 			continue
 		}
-		v, ok := semver.Parse(row.Version)
-		if !ok {
+		if row.Major < 0 || row.Minor < 0 || row.Patch < 0 {
 			continue
 		}
-		if !bestSet || semver.Compare(v, bestVer) > 0 {
+		if !bestSet || compareVersion(row, best) > 0 {
 			best = row
-			bestVer = v
 			bestSet = true
 		}
 	}
@@ -44,7 +44,7 @@ func selectVersion(rows []versionRow, requested string) (versionRow, bool) {
 	}
 
 	for _, row := range rows {
-		if strings.TrimSpace(row.SHA) == "" || strings.TrimSpace(row.Version) == "" {
+		if strings.TrimSpace(row.SHA) == "" {
 			continue
 		}
 		return row, true
@@ -53,8 +53,22 @@ func selectVersion(rows []versionRow, requested string) (versionRow, bool) {
 	return versionRow{}, false
 }
 
-func normalizeVersion(v string) string {
-	v = strings.TrimSpace(v)
-	v = strings.TrimPrefix(v, "v")
-	return v
+func compareVersion(a, b versionRow) int {
+	if a.Major != b.Major {
+		return cmpInt(a.Major, b.Major)
+	}
+	if a.Minor != b.Minor {
+		return cmpInt(a.Minor, b.Minor)
+	}
+	return cmpInt(a.Patch, b.Patch)
+}
+
+func cmpInt(a, b int) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
 }

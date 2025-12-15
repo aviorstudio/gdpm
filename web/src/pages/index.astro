@@ -7,6 +7,7 @@ import Title from '../components/Title.astro';
 import PluginList from '../components/PluginList.astro';
 import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
+import { formatSemverTripletFromNullable } from '../lib/semver';
 import { supabase } from '../lib/supabase';
 
 type PluginRecord = {
@@ -20,7 +21,9 @@ type PluginRecord = {
 
 type PluginVersionRecord = {
   plugin_id: string;
-  version: string | null;
+  major: number | null;
+  minor: number | null;
+  patch: number | null;
   sha: string | null;
   created_at: string | null;
 };
@@ -46,7 +49,7 @@ if (plugins.length > 0) {
     for (const row of (versionRows as PluginVersionRecord[] | null) ?? []) {
       if (!latestReleaseByPluginId.has(row.plugin_id)) {
         latestReleaseByPluginId.set(row.plugin_id, {
-          version: row.version ?? '',
+          version: formatSemverTripletFromNullable(row),
           sha: row.sha ?? '',
           createdAt: row.created_at ?? '',
         });

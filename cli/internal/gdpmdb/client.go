@@ -86,7 +86,12 @@ func (c *Client) ResolvePlugin(ctx context.Context, username, plugin, requestedV
 		return ResolvedPlugin{}, fmt.Errorf("version not found: %s", requestedVersion)
 	}
 	if strings.TrimSpace(selected.SHA) == "" {
-		return ResolvedPlugin{}, fmt.Errorf("selected version has no sha: %s", selected.Version)
+		return ResolvedPlugin{}, fmt.Errorf(
+			"selected version has no sha: %d.%d.%d",
+			selected.Major,
+			selected.Minor,
+			selected.Patch,
+		)
 	}
 
 	ghOwner, ghRepo, err := ParseGitHubOwnerRepo(pluginRow.Repo)
@@ -99,7 +104,7 @@ func (c *Client) ResolvePlugin(ctx context.Context, username, plugin, requestedV
 		Repo:        pluginRow.Repo,
 		GitHubOwner: ghOwner,
 		GitHubRepo:  ghRepo,
-		Version:     selected.Version,
+		Version:     fmt.Sprintf("%d.%d.%d", selected.Major, selected.Minor, selected.Patch),
 		SHA:         selected.SHA,
 	}, nil
 }
@@ -121,7 +126,9 @@ type pluginRow struct {
 
 type versionRow struct {
 	PluginID  *string `json:"plugin_id"`
-	Version   string  `json:"version"`
+	Major     int     `json:"major"`
+	Minor     int     `json:"minor"`
+	Patch     int     `json:"patch"`
 	SHA       string  `json:"sha"`
 	CreatedAt *string `json:"created_at"`
 }
@@ -179,9 +186,9 @@ func (c *Client) listPluginVersions(ctx context.Context, pluginID string) ([]ver
 	}
 
 	q := url.Values{}
-	q.Set("select", "plugin_id,version,sha,created_at")
+	q.Set("select", "plugin_id,major,minor,patch,sha,created_at")
 	q.Set("plugin_id", "eq."+pluginID)
-	q.Set("order", "created_at.desc")
+	q.Set("order", "major.desc,minor.desc,patch.desc,created_at.desc")
 	q.Set("limit", "100")
 
 	var rows []versionRow

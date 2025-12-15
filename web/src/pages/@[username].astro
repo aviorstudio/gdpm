@@ -9,6 +9,7 @@ import Input from '../components/Input.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../lib/auth';
 import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
+import { formatSemverTripletFromNullable, parseSemverTriplet } from '../lib/semver';
 import { supabase } from '../lib/supabase';
 
 type UsernameRecord = {
@@ -26,7 +27,9 @@ type PluginRecord = {
 
 type PluginVersionRecord = {
   plugin_id: string;
-  version: string | null;
+  major: number | null;
+  minor: number | null;
+  patch: number | null;
   sha: string | null;
   created_at: string | null;
 };
@@ -144,31 +147,39 @@ if (!usernameNormal) {
             createStatus = 'Plugin name, repository, version, and sha are required.';
             createTone = 'error';
           } else {
-            const { data: createdPlugin, error: pluginError } = await pluginsDto.insert(supabase, {
-              profile_id: ownerProfileId,
-              org_id: null,
-              name: formName,
-              repo: formRepo,
-            });
-
-            if (pluginError) {
-              createStatus = pluginError.message;
-              createTone = 'error';
-            } else if (!createdPlugin?.id) {
-              createStatus = 'Plugin created but no id returned.';
+            const versionTriplet = parseSemverTriplet(formVersion);
+            if (!versionTriplet) {
+              createStatus = 'Version must be in MAJOR.MINOR.PATCH format.';
               createTone = 'error';
             } else {
-              const { error: versionError } = await pluginVersionsDto.insert(supabase, {
-                plugin_id: createdPlugin.id,
-                version: formVersion,
-                sha: formSha,
+              const { data: createdPlugin, error: pluginError } = await pluginsDto.insert(supabase, {
+                profile_id: ownerProfileId,
+                org_id: null,
+                name: formName,
+                repo: formRepo,
               });
 
-              if (versionError) {
-                createStatus = versionError.message;
+              if (pluginError) {
+                createStatus = pluginError.message;
+                createTone = 'error';
+              } else if (!createdPlugin?.id) {
+                createStatus = 'Plugin created but no id returned.';
                 createTone = 'error';
               } else {
-                return Astro.redirect(`/@${encodeURIComponent(usernameDisplay)}/${encodeURIComponent(formName)}`);
+                const { error: versionError } = await pluginVersionsDto.insert(supabase, {
+                  plugin_id: createdPlugin.id,
+                  major: versionTriplet.major,
+                  minor: versionTriplet.minor,
+                  patch: versionTriplet.patch,
+                  sha: formSha,
+                });
+
+                if (versionError) {
+                  createStatus = versionError.message;
+                  createTone = 'error';
+                } else {
+                  return Astro.redirect(`/@${encodeURIComponent(usernameDisplay)}/${encodeURIComponent(formName)}`);
+                }
               }
             }
           }
@@ -199,7 +210,7 @@ if (!usernameNormal) {
             for (const row of (versionRows as PluginVersionRecord[] | null) ?? []) {
               if (!latestReleaseByPluginId.has(row.plugin_id)) {
                 latestReleaseByPluginId.set(row.plugin_id, {
-                  version: row.version ?? '',
+                  version: formatSemverTripletFromNullable(row),
                   sha: row.sha ?? '',
                   createdAt: row.created_at ?? '',
                 });
