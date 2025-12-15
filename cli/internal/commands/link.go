@@ -155,6 +155,9 @@ func disableEditorPluginAliases(projectGodotPath, projectDir string, m manifest.
 			if _, err := project.SetEditorPluginEnabled(projectGodotPath, legacyPluginCfgResPath, false); err != nil {
 				return err
 			}
+			if _, err := project.ReplaceAutoloadAddonDir(projectGodotPath, legacyAddonDirName, addonDirName); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -190,6 +193,9 @@ func disableEditorPluginAliases(projectGodotPath, projectDir string, m manifest.
 		if _, err := project.SetEditorPluginEnabled(projectGodotPath, otherPluginCfgResPath, false); err != nil {
 			return err
 		}
+		if _, err := project.ReplaceAutoloadAddonDir(projectGodotPath, otherAddonDirName, addonDirName); err != nil {
+			return err
+		}
 	}
 
 	addonsDir := filepath.Join(projectDir, "addons")
@@ -217,6 +223,9 @@ func disableEditorPluginAliases(projectGodotPath, projectDir string, m manifest.
 
 		legacyPluginCfgResPath := "res://" + path.Join("addons", name, "plugin.cfg")
 		if _, err := project.SetEditorPluginEnabled(projectGodotPath, legacyPluginCfgResPath, false); err != nil {
+			return err
+		}
+		if _, err := project.ReplaceAutoloadAddonDir(projectGodotPath, name, addonDirName); err != nil {
 			return err
 		}
 	}

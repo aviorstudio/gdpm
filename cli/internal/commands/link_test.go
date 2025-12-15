@@ -155,7 +155,7 @@ func TestLink_DisablesLegacyEditorPluginEntryDerivedFromPath(t *testing.T) {
 	}
 
 	projectGodotPath := filepath.Join(projectDir, "project.godot")
-	in := "config_version=5\n\n[editor_plugins]\nenabled=PackedStringArray(\"res://addons/@gd-playwright-emitter/plugin.cfg\")\n"
+	in := "config_version=5\n\n[autoload]\nPlaywrightService=\"*res://addons/@gd-playwright-emitter/autoload.gd\"\n\n[editor_plugins]\nenabled=PackedStringArray(\"res://addons/@gd-playwright-emitter/plugin.cfg\")\n"
 	if err := os.WriteFile(projectGodotPath, []byte(in), 0o644); err != nil {
 		t.Fatalf("write project.godot: %v", err)
 	}
@@ -189,5 +189,11 @@ func TestLink_DisablesLegacyEditorPluginEntryDerivedFromPath(t *testing.T) {
 	}
 	if !strings.Contains(out, "res://addons/@aviorstudio_gd-playwright/plugin.cfg") {
 		t.Fatalf("expected new enabled entry added, got:\n%s", out)
+	}
+	if strings.Contains(out, "res://addons/@gd-playwright-emitter/autoload.gd") {
+		t.Fatalf("expected legacy autoload path removed, got:\n%s", out)
+	}
+	if !strings.Contains(out, "res://addons/@aviorstudio_gd-playwright/autoload.gd") {
+		t.Fatalf("expected updated autoload path, got:\n%s", out)
 	}
 }
