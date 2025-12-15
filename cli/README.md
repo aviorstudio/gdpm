@@ -2,6 +2,8 @@
 
 Installs Godot addons from GitHub repositories into your project's `addons/` folder and tracks them in `gdpm.json`.
 
+`gdpm` expects the addon directory to contain a `plugin.cfg` at its root (so it can be enabled automatically in `project.godot`).
+
 ## Build
 
 From `cli/`:

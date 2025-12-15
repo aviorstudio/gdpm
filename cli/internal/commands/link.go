@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -56,6 +57,12 @@ func Link(ctx context.Context, opts LinkOptions) error {
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("%w: local path is not a directory: %s", ErrUserInput, abs)
+	}
+
+	if ok, err := pluginCfgExistsAtDirRoot(abs); err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	} else if !ok {
+		return fmt.Errorf("%w: plugin.cfg not found at %s (pass the addon directory that contains plugin.cfg)", ErrUserInput, filepath.Join(abs, "plugin.cfg"))
 	}
 
 	var pluginKey string
@@ -117,6 +124,14 @@ func Link(ctx context.Context, opts LinkOptions) error {
 		return err
 	}
 
+	if ok, err := pluginCfgExistsAtDirRoot(dst); err != nil {
+		_ = fsutil.RemoveAll(dst)
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	} else if !ok {
+		_ = fsutil.RemoveAll(dst)
+		return fmt.Errorf("%w: linked addon is missing plugin.cfg at %s", ErrUserInput, filepath.Join(dst, "plugin.cfg"))
+	}
+
 	storedPath, err := fsutil.AbbrevHome(abs)
 	if err != nil {
 		return err
@@ -126,6 +141,20 @@ func Link(ctx context.Context, opts LinkOptions) error {
 	plugin.Path = storedPath
 	m = manifest.UpsertPlugin(m, pluginKey, plugin)
 	if err := manifest.Save(manifestPath, m); err != nil {
+		return err
+	}
+
+	projectGodotPath := filepath.Join(projectDir, "project.godot")
+	if _, err := os.Stat(projectGodotPath); err == nil {
+		pluginCfgResPath := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+		updated, err := project.SetEditorPluginEnabled(projectGodotPath, pluginCfgResPath, true)
+		if err != nil {
+			return err
+		}
+		if updated {
+			fmt.Printf("enabled %s\n", pluginCfgResPath)
+		}
+	} else if !os.IsNotExist(err) {
 		return err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -76,6 +77,20 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 	dst := filepath.Join(projectDir, "addons", addonDirName)
 
 	if strings.TrimSpace(plugin.Repo) == "" {
+		projectGodotPath := filepath.Join(projectDir, "project.godot")
+		if _, err := os.Stat(projectGodotPath); err == nil {
+			pluginCfgResPath := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+			updated, err := project.SetEditorPluginEnabled(projectGodotPath, pluginCfgResPath, false)
+			if err != nil {
+				return err
+			}
+			if updated {
+				fmt.Printf("disabled %s\n", pluginCfgResPath)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+
 		if err := fsutil.RemoveAll(dst); err != nil {
 			return err
 		}
@@ -110,6 +125,13 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 		return err
 	}
 
+	if ok, err := pluginCfgExistsAtDirRoot(rootDir); err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	} else if !ok {
+		expected := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+		return fmt.Errorf("%w: package is missing plugin.cfg at repository root (expected to install it to %s)", ErrUserInput, expected)
+	}
+
 	localAddonsDir := filepath.Join(projectDir, "addons")
 	if err := os.MkdirAll(localAddonsDir, 0o755); err != nil {
 		return err
@@ -123,9 +145,31 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 		return err
 	}
 
+	if ok, err := pluginCfgExistsAtDirRoot(dst); err != nil {
+		_ = fsutil.RemoveAll(dst)
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	} else if !ok {
+		_ = fsutil.RemoveAll(dst)
+		return fmt.Errorf("%w: installed addon is missing plugin.cfg at %s", ErrUserInput, filepath.Join(dst, "plugin.cfg"))
+	}
+
 	plugin.Path = ""
 	m = manifest.UpsertPlugin(m, pluginKey, plugin)
 	if err := manifest.Save(manifestPath, m); err != nil {
+		return err
+	}
+
+	projectGodotPath := filepath.Join(projectDir, "project.godot")
+	if _, err := os.Stat(projectGodotPath); err == nil {
+		pluginCfgResPath := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+		updated, err := project.SetEditorPluginEnabled(projectGodotPath, pluginCfgResPath, true)
+		if err != nil {
+			return err
+		}
+		if updated {
+			fmt.Printf("enabled %s\n", pluginCfgResPath)
+		}
+	} else if !os.IsNotExist(err) {
 		return err
 	}
 
