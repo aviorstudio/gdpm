@@ -21,8 +21,12 @@ type RemoveOptions struct {
 func Remove(ctx context.Context, opts RemoveOptions) error {
 	_ = ctx
 
-	if opts.Spec == "" {
+	specInput := strings.TrimSpace(opts.Spec)
+	if specInput == "" {
 		return fmt.Errorf("%w: missing plugin spec", ErrUserInput)
+	}
+	if !strings.HasPrefix(specInput, "@") {
+		specInput = "@" + specInput
 	}
 
 	startDir, err := os.Getwd()
@@ -41,7 +45,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return err
 	}
 
-	pkg, err := spec.ParsePackageSpec(opts.Spec)
+	pkg, err := spec.ParsePackageSpec(specInput)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}

@@ -26,6 +26,9 @@ func Link(ctx context.Context, opts LinkOptions) error {
 	if specInput == "" {
 		return fmt.Errorf("%w: missing plugin spec", ErrUserInput)
 	}
+	if !strings.HasPrefix(specInput, "@") {
+		specInput = "@" + specInput
+	}
 	pkg, err := spec.ParsePackageSpec(specInput)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
@@ -34,11 +37,6 @@ func Link(ctx context.Context, opts LinkOptions) error {
 		return fmt.Errorf("%w: link does not take a version (use @username/plugin)", ErrUserInput)
 	}
 	pluginKey := pkg.Name()
-
-	pathInput := strings.TrimSpace(opts.Path)
-	if pathInput == "" {
-		return fmt.Errorf("%w: missing local path", ErrUserInput)
-	}
 
 	startDir, err := os.Getwd()
 	if err != nil {
@@ -56,16 +54,35 @@ func Link(ctx context.Context, opts LinkOptions) error {
 		return err
 	}
 
-	plugin := m.Plugins[pluginKey]
+	plugin, pluginExists := m.Plugins[pluginKey]
 
-	expanded, err := fsutil.ExpandHome(pathInput)
-	if err != nil {
-		return err
+	pathInput := strings.TrimSpace(opts.Path)
+	usingStoredPath := false
+	if pathInput == "" {
+		if !pluginExists || plugin.Link == nil || strings.TrimSpace(plugin.Link.Path) == "" {
+			return fmt.Errorf("%w: missing local path (run `gdpm link %s <local_path>`)", ErrUserInput, pluginKey)
+		}
+		pathInput = plugin.Link.Path
+		usingStoredPath = true
 	}
-	abs, err := filepath.Abs(expanded)
-	if err != nil {
-		return err
+
+	var abs string
+	if usingStoredPath {
+		abs, err = pluginAbsPath(projectDir, pathInput)
+		if err != nil {
+			return err
+		}
+	} else {
+		expanded, err := fsutil.ExpandHome(pathInput)
+		if err != nil {
+			return err
+		}
+		abs, err = filepath.Abs(expanded)
+		if err != nil {
+			return err
+		}
 	}
+
 	info, err := os.Stat(abs)
 	if err != nil {
 		return err
@@ -110,16 +127,21 @@ func Link(ctx context.Context, opts LinkOptions) error {
 		return fmt.Errorf("%w: linked addon is missing plugin.cfg at %s", ErrUserInput, filepath.Join(dst, "plugin.cfg"))
 	}
 
-	storedPath, err := fsutil.AbbrevHome(abs)
-	if err != nil {
-		return err
+	storedPath := pathInput
+	if !usingStoredPath {
+		storedPath, err = fsutil.AbbrevHome(abs)
+		if err != nil {
+			return err
+		}
 	}
 
 	if plugin.Link == nil {
 		plugin.Link = &manifest.Link{}
 	}
 	plugin.Link.Enabled = true
-	plugin.Link.Path = storedPath
+	if !usingStoredPath {
+		plugin.Link.Path = storedPath
+	}
 	m = manifest.UpsertPlugin(m, pluginKey, plugin)
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
