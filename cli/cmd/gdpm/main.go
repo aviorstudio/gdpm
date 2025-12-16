@@ -162,7 +162,7 @@ func runUnlink(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: gdpm unlink @username/plugin | gdpm unlink @name")
+		fmt.Fprintln(os.Stderr, "usage: gdpm unlink @username/plugin")
 		return 2
 	}
 
@@ -217,7 +217,6 @@ Usage:
   gdpm remove @username/plugin
   gdpm link @username/plugin [local_path]
   gdpm unlink @username/plugin
-  gdpm unlink @name
 
 Environment:
   GITHUB_TOKEN   Optional GitHub token to avoid rate limits.`)

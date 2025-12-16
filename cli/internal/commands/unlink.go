@@ -45,22 +45,14 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 		return err
 	}
 
-	var pluginKey string
-	if strings.Contains(specInput, "/") {
-		pkg, err := spec.ParsePackageSpec(specInput)
-		if err != nil {
-			return fmt.Errorf("%w: %v", ErrUserInput, err)
-		}
-		if pkg.Version != "" {
-			return fmt.Errorf("%w: unlink does not take a version (use @username/plugin)", ErrUserInput)
-		}
-		pluginKey = pkg.Name()
-	} else {
-		if strings.Count(specInput, "@") > 1 {
-			return fmt.Errorf("%w: invalid plugin name %q", ErrUserInput, specInput)
-		}
-		pluginKey = specInput
+	pkg, err := spec.ParsePackageSpec(specInput)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
+	if pkg.Version != "" {
+		return fmt.Errorf("%w: unlink does not take a version (use @username/plugin)", ErrUserInput)
+	}
+	pluginKey := pkg.Name()
 
 	plugin, ok := m.Plugins[pluginKey]
 	if !ok {
