@@ -5,23 +5,73 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aviorstudio/gdpm/cli/internal/fsutil"
 )
 
-const SchemaVersionLegacy = "0.0.1"
-const SchemaVersionPath = "0.0.2"
-const SchemaVersionCurrent = "0.0.3"
-
 type Manifest struct {
-	SchemaVersion string            `json:"schemaVersion"`
-	Plugins       map[string]Plugin `json:"plugins"`
+	Plugins map[string]Plugin `json:"plugins"`
 }
 
 type Plugin struct {
 	Repo    string `json:"repo,omitempty"`
 	Version string `json:"version,omitempty"`
-	Link    string `json:"link,omitempty"`
+	Link    *Link  `json:"link,omitempty"`
+}
+
+type Link struct {
+	Enabled bool   `json:"enabled"`
+	Path    string `json:"path,omitempty"`
+}
+
+func (l *Link) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
+		*l = Link{}
+		return nil
+	}
+	if data[0] != '{' {
+		return fmt.Errorf("link must be an object")
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for k := range raw {
+		switch k {
+		case "enabled", "path":
+		default:
+			return fmt.Errorf("unknown link field %q", k)
+		}
+	}
+
+	enabledRaw, ok := raw["enabled"]
+	if !ok {
+		return fmt.Errorf("missing link.enabled")
+	}
+	var enabled bool
+	if err := json.Unmarshal(enabledRaw, &enabled); err != nil {
+		return err
+	}
+
+	var path string
+	if pathRaw, ok := raw["path"]; ok {
+		if err := json.Unmarshal(pathRaw, &path); err != nil {
+			return err
+		}
+	}
+	path = strings.TrimSpace(path)
+	if enabled && path == "" {
+		return fmt.Errorf("link is enabled but path is empty")
+	}
+
+	*l = Link{
+		Enabled: enabled,
+		Path:    path,
+	}
+	return nil
 }
 
 func (p *Plugin) UnmarshalJSON(data []byte) error {
@@ -31,7 +81,7 @@ func (p *Plugin) UnmarshalJSON(data []byte) error {
 	}
 	for k := range raw {
 		switch k {
-		case "repo", "version", "link", "path":
+		case "repo", "version", "link":
 		default:
 			return fmt.Errorf("unknown field %q", k)
 		}
@@ -40,32 +90,23 @@ func (p *Plugin) UnmarshalJSON(data []byte) error {
 	var tmp struct {
 		Repo    string `json:"repo,omitempty"`
 		Version string `json:"version,omitempty"`
-		Link    string `json:"link,omitempty"`
-		Path    string `json:"path,omitempty"`
+		Link    *Link  `json:"link,omitempty"`
 	}
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
 
-	link := tmp.Link
-	if link == "" {
-		link = tmp.Path
-	} else if tmp.Path != "" && tmp.Path != tmp.Link {
-		return fmt.Errorf("plugin has both link %q and path %q", tmp.Link, tmp.Path)
-	}
-
 	*p = Plugin{
 		Repo:    tmp.Repo,
 		Version: tmp.Version,
-		Link:    link,
+		Link:    tmp.Link,
 	}
 	return nil
 }
 
 func New() Manifest {
 	return Manifest{
-		SchemaVersion: SchemaVersionCurrent,
-		Plugins:       map[string]Plugin{},
+		Plugins: map[string]Plugin{},
 	}
 }
 
@@ -81,12 +122,6 @@ func Load(path string) (Manifest, error) {
 	if err := dec.Decode(&m); err != nil {
 		return Manifest{}, err
 	}
-	if m.SchemaVersion == "" {
-		m.SchemaVersion = SchemaVersionLegacy
-	}
-	if m.SchemaVersion != SchemaVersionLegacy && m.SchemaVersion != SchemaVersionPath && m.SchemaVersion != SchemaVersionCurrent {
-		return Manifest{}, fmt.Errorf("unsupported gdpm.json schemaVersion %q (expected %q, %q, or %q)", m.SchemaVersion, SchemaVersionLegacy, SchemaVersionPath, SchemaVersionCurrent)
-	}
 	if m.Plugins == nil {
 		m.Plugins = map[string]Plugin{}
 	}
@@ -97,7 +132,6 @@ func Save(path string, m Manifest) error {
 	if m.Plugins == nil {
 		m.Plugins = map[string]Plugin{}
 	}
-	m.SchemaVersion = SchemaVersionCurrent
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err

@@ -27,7 +27,12 @@ func TestLink_ReplacesLegacyEditorPluginEntryForSameLocalPath(t *testing.T) {
 	}
 
 	m := manifest.New()
-	m = manifest.UpsertPlugin(m, "@local_plugin", manifest.Plugin{Link: pluginDir})
+	m = manifest.UpsertPlugin(m, "@local_plugin", manifest.Plugin{
+		Link: &manifest.Link{
+			Enabled: true,
+			Path:    pluginDir,
+		},
+	})
 	if err := manifest.Save(filepath.Join(projectDir, "gdpm.json"), m); err != nil {
 		t.Fatalf("write gdpm.json: %v", err)
 	}
@@ -133,8 +138,14 @@ func TestLink_OverwritesExistingAddonsDirWhenNotInManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read gdpm.json: %v", err)
 	}
-	if got := m2.Plugins["@user/plugin"].Link; got != pluginDir {
-		t.Fatalf("expected gdpm.json link %q, got %q", pluginDir, got)
+	if m2.Plugins["@user/plugin"].Link == nil {
+		t.Fatalf("expected gdpm.json link to be set")
+	}
+	if got := m2.Plugins["@user/plugin"].Link.Path; got != pluginDir {
+		t.Fatalf("expected gdpm.json link.path %q, got %q", pluginDir, got)
+	}
+	if got := m2.Plugins["@user/plugin"].Link.Enabled; got != true {
+		t.Fatalf("expected gdpm.json link.enabled=true, got %v", got)
 	}
 }
 

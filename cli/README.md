@@ -30,19 +30,24 @@ gdpm unlink @name
 
 ```json
 {
-  "schemaVersion": "0.0.3",
   "plugins": {
     "@user/plugin": {
       "repo": "https://github.com/owner/repo/tree/<sha>",
       "version": "1.2.3",
-      "link": "~/dev/plugin"
+      "link": {
+        "enabled": true,
+        "path": "~/dev/plugin"
+      }
     },
     "@user/monorepo_plugin": {
       "repo": "https://github.com/owner/monorepo/tree/<sha>/path/to/addon",
       "version": "1.2.3"
     },
     "@user/other": {
-      "link": "~/dev/other"
+      "link": {
+        "enabled": true,
+        "path": "~/dev/other"
+      }
     }
   }
 }

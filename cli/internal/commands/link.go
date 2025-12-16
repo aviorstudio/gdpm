@@ -115,7 +115,11 @@ func Link(ctx context.Context, opts LinkOptions) error {
 		return err
 	}
 
-	plugin.Link = storedPath
+	if plugin.Link == nil {
+		plugin.Link = &manifest.Link{}
+	}
+	plugin.Link.Enabled = true
+	plugin.Link.Path = storedPath
 	m = manifest.UpsertPlugin(m, pluginKey, plugin)
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err
@@ -165,11 +169,11 @@ func disableEditorPluginAliases(projectGodotPath, projectDir string, m manifest.
 		if otherKey == pluginKey {
 			continue
 		}
-		if strings.TrimSpace(otherPlugin.Link) == "" {
+		if !pluginLinkEnabled(otherPlugin) {
 			continue
 		}
 
-		otherAbs, err := pluginAbsPath(projectDir, otherPlugin.Link)
+		otherAbs, err := pluginAbsPath(projectDir, pluginLinkPath(otherPlugin))
 		if err != nil {
 			continue
 		}
