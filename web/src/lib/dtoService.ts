@@ -11,6 +11,32 @@ export const profilesDto = {
   upsert: (client: SupabaseClient, payload: ProfileUpsert) => client.from('profiles').upsert(payload),
 };
 
+export type OrgInsert = {
+  name: string;
+  contact_email?: string | null;
+};
+
+export const orgsDto = {
+  insert: (client: SupabaseClient, payload: OrgInsert) => client.from('orgs').insert(payload).select('*').maybeSingle(),
+};
+
+export type OrgProfileInsert = {
+  org_id: string;
+  profile_id: string;
+  admin?: boolean;
+};
+
+export const orgsProfilesDto = {
+  insert: (client: SupabaseClient, payload: OrgProfileInsert) =>
+    client.from('orgs_profiles').insert(payload).select('*').maybeSingle(),
+  getByOrgIdAndProfileId: (client: SupabaseClient, orgId: string, profileId: string) =>
+    client.from('orgs_profiles').select('*').eq('org_id', orgId).eq('profile_id', profileId).maybeSingle(),
+  listByProfileId: (client: SupabaseClient, profileId: string) =>
+    client.from('orgs_profiles').select('org_id,admin,created_at').eq('profile_id', profileId).order('created_at', {
+      ascending: false,
+    }),
+};
+
 export type UsernameInsert = {
   username_display: string;
   username_normal: string;

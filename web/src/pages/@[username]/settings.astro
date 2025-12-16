@@ -3,10 +3,11 @@ export const prerender = false;
 
 import RootLayout from '../../layouts/RootLayout.astro';
 import Card from '../../components/Card.astro';
+import Dialog from '../../components/Dialog.astro';
 import Title from '../../components/Title.astro';
 import Input from '../../components/Input.astro';
 import { getSessionFromCookies } from '../../lib/auth';
-import { usernamesDto } from '../../lib/dtoService';
+import { orgsDto, orgsProfilesDto, usernamesDto } from '../../lib/dtoService';
 import { supabase } from '../../lib/supabase';
 
 type UsernameRecord = {
@@ -24,6 +25,18 @@ const safeDecodeURIComponent = (value: string) => {
 };
 
 const normalizeUsername = (value: string) => value.trim().toLowerCase();
+const reservedUsernames = new Set([
+  'signin',
+  'register',
+  'account',
+  'api',
+  '404',
+  'robots.txt',
+  'sitemap.xml',
+  'favicon.ico',
+  'favicon.svg',
+]);
+const isReservedUsername = (value: string) => reservedUsernames.has(value);
 
 const usernameParamRaw = Astro.params.username ?? '';
 const usernameParam = safeDecodeURIComponent(usernameParamRaw);
@@ -53,10 +66,92 @@ if (!usernameRecord.profile_id || usernameRecord.profile_id !== profileId) {
 
 const email = session.user?.email ?? '';
 const usernameDisplay = usernameRecord.username_display || usernameParam;
+
+let showCreateOrgDialog = Astro.url.searchParams.get('create_org') === '1';
+let createOrgStatus = '';
+let createOrgTone: 'muted' | 'error' | 'success' = 'muted';
+let formOrgUsername = '';
+let formOrgName = '';
+let formOrgContactEmail = email;
+
+if (Astro.request.method === 'POST') {
+  showCreateOrgDialog = true;
+  const formData = await Astro.request.formData();
+  formOrgUsername = String(formData.get('org_username') ?? '').trim();
+  formOrgName = String(formData.get('org_name') ?? '').trim();
+  formOrgContactEmail = String(formData.get('contact_email') ?? '').trim() || email;
+
+  const orgUsernameDisplay = formOrgUsername;
+  const orgUsernameNormal = normalizeUsername(orgUsernameDisplay);
+  const orgName = formOrgName || orgUsernameDisplay;
+  const orgContactEmail = formOrgContactEmail || email;
+
+  if (!orgUsernameNormal) {
+    createOrgStatus = 'Organization username is required.';
+    createOrgTone = 'error';
+  } else if (isReservedUsername(orgUsernameNormal)) {
+    createOrgStatus = 'That username is reserved.';
+    createOrgTone = 'error';
+  } else {
+    const { data: existingUsername, error: existingUsernameError } = await usernamesDto.getByUsernameNormal(
+      supabase,
+      orgUsernameNormal
+    );
+
+    if (existingUsernameError) {
+      createOrgStatus = existingUsernameError.message;
+      createOrgTone = 'error';
+    } else if (existingUsername) {
+      createOrgStatus = 'That username is already taken.';
+      createOrgTone = 'error';
+    } else {
+      const { data: createdOrg, error: orgError } = await orgsDto.insert(supabase, {
+        name: orgName,
+        ...(orgContactEmail ? { contact_email: orgContactEmail } : {}),
+      });
+      if (orgError) {
+        createOrgStatus = orgError.message;
+        createOrgTone = 'error';
+      } else if (!createdOrg?.id) {
+        createOrgStatus = 'Organization created but no id returned.';
+        createOrgTone = 'error';
+      } else {
+        const { error: membershipError } = await orgsProfilesDto.insert(supabase, {
+          org_id: createdOrg.id,
+          profile_id: profileId,
+          admin: true,
+        });
+
+        if (membershipError) {
+          createOrgStatus = membershipError.message;
+          createOrgTone = 'error';
+        } else {
+          const { error: createUsernameError } = await usernamesDto.insert(supabase, {
+            username_display: orgUsernameDisplay,
+            username_normal: orgUsernameNormal,
+            org_id: createdOrg.id,
+          });
+
+          if (createUsernameError) {
+            createOrgStatus =
+              createUsernameError.code === '23505' ? 'That username is already taken.' : createUsernameError.message;
+            createOrgTone = 'error';
+          } else {
+            return Astro.redirect(`/@${encodeURIComponent(orgUsernameDisplay)}`);
+          }
+        }
+      }
+    }
+  }
+}
 ---
 
 <RootLayout>
-  <Title title="Settings" subtitle="Manage your profile details. Saving changes isn’t wired up yet." />
+  <Title
+    title="Settings"
+    subtitle="Manage your profile details. Saving changes isn’t wired up yet."
+    action={{ href: '?create_org=1', label: 'Create org' }}
+  />
 
   <Card class="flex flex-col gap-5">
     <div class="grid gap-4 md:grid-cols-2">
@@ -115,4 +210,58 @@ const usernameDisplay = usernameRecord.username_display || usernameParam;
       </button>
     </form>
   </Card>
+
+  <Dialog id="create-org-dialog" open={showCreateOrgDialog} title="Create an org" size="lg">
+    <Fragment slot="description">Set up a new organization to publish plugins under.</Fragment>
+
+    <form method="post" action={Astro.url.pathname} class="flex flex-col gap-4">
+      <Input
+        label="Org username"
+        name="org_username"
+        placeholder="my-awesome-studio"
+        type="text"
+        value={formOrgUsername}
+        minlength="3"
+        maxlength="32"
+        required
+      />
+
+      <Input label="Org name" name="org_name" placeholder="My Awesome Studio" type="text" value={formOrgName} />
+
+      <Input
+        label="Contact email"
+        name="contact_email"
+        placeholder="team@example.com"
+        type="email"
+        autocomplete="email"
+        value={formOrgContactEmail}
+      />
+
+      <p
+        class:list={{
+          'min-h-[20px] text-sm': true,
+          'text-slate-500': createOrgTone === 'muted',
+          'text-red-600': createOrgTone === 'error',
+          'text-green-600': createOrgTone === 'success',
+        }}
+      >
+        {createOrgStatus}
+      </p>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <a
+          class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+          href={Astro.url.pathname}
+        >
+          Cancel
+        </a>
+        <button
+          class="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600"
+          type="submit"
+        >
+          Create org
+        </button>
+      </div>
+    </form>
+  </Dialog>
 </RootLayout>
