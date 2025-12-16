@@ -18,6 +18,7 @@ go build ./cmd/gdpm
 gdpm init
 gdpm add @username/plugin@1.2.3
 gdpm add @username/plugin
+gdpm install
 gdpm remove @username/plugin
 gdpm link @username/plugin /absolute/path/to/addons/dir
 gdpm link @username/plugin

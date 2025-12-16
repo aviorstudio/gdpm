@@ -36,6 +36,8 @@ func run(args []string) int {
 		return runLink(args[2:])
 	case "unlink":
 		return runUnlink(args[2:])
+	case "install":
+		return runInstall(args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", cmd)
 		printUsage()
@@ -180,12 +182,38 @@ func runUnlink(args []string) int {
 	return 0
 }
 
+func runInstall(args []string) int {
+	fs := flag.NewFlagSet("install", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: gdpm install")
+		return 2
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	if err := commands.Install(ctx, commands.InstallOptions{}); err != nil {
+		if errors.Is(err, commands.ErrUserInput) {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
 func printUsage() {
 	fmt.Fprintln(os.Stderr, `gdpm - Godot plugin manager (GitHub addons installer)
 
 Usage:
   gdpm init
   gdpm add @username/plugin[@version]
+  gdpm install
   gdpm remove @username/plugin
   gdpm link @username/plugin [local_path]
   gdpm unlink @username/plugin
