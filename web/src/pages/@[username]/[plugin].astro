@@ -14,7 +14,7 @@ import { supabase } from '../../lib/supabase';
 
 type UsernameRecord = {
   username_display: string | null;
-  profile_id: string | null;
+  user_id: string | null;
   org_id: string | null;
 };
 
@@ -113,12 +113,12 @@ if (!usernameNormal || !pluginName) {
     ownerLabel = `@${usernameDisplay}`;
     ownerSlug = encodeURIComponent(usernameDisplay);
 
-    const ownerProfileId = usernameRecord.profile_id;
+    const ownerProfileId = usernameRecord.user_id;
     const ownerOrgId = usernameRecord.org_id;
 
     let canPublishForOrg = false;
     if (ownerOrgId && profileId) {
-      const { data: membershipRow, error: membershipError } = await orgsProfilesDto.getByOrgIdAndProfileId(
+      const { data: membershipRow, error: membershipError } = await orgsProfilesDto.getByOrgIdAndUserId(
         supabase,
         ownerOrgId,
         profileId
@@ -150,7 +150,7 @@ if (!usernameNormal || !pluginName) {
     } else {
       const { data: pluginRow, error: pluginError } = ownerOrgId
         ? await pluginsDto.getByOrgIdAndName(supabase, ownerOrgId, pluginName)
-        : await pluginsDto.getByProfileIdAndName(supabase, ownerProfileId ?? '', pluginName);
+        : await pluginsDto.getByUserIdAndName(supabase, ownerProfileId ?? '', pluginName);
 
       if (pluginError) {
         Astro.response.status = 500;

@@ -12,7 +12,7 @@ import { supabase } from '../../lib/supabase';
 
 type UsernameRecord = {
   username_display: string | null;
-  profile_id: string | null;
+  user_id: string | null;
   org_id: string | null;
 };
 
@@ -60,7 +60,7 @@ if (usernameError || !usernameRow) {
 }
 
 const usernameRecord = usernameRow as UsernameRecord;
-if (!usernameRecord.profile_id || usernameRecord.profile_id !== profileId) {
+if (!usernameRecord.user_id || usernameRecord.user_id !== profileId) {
   return Astro.redirect(publicPath);
 }
 
@@ -118,7 +118,7 @@ if (Astro.request.method === 'POST') {
       } else {
         const { error: membershipError } = await orgsProfilesDto.insert(supabase, {
           org_id: createdOrg.id,
-          profile_id: profileId,
+          user_id: profileId,
           admin: true,
         });
 

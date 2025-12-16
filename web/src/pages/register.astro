@@ -108,7 +108,7 @@ if (Astro.request.method === 'POST') {
                 const { error: usernameError } = await usernamesDto.insert(supabase, {
                   username_display: usernameDisplay,
                   username_normal: usernameNormal,
-                  profile_id: userId,
+                  user_id: userId,
                 });
                 if (usernameError) {
                   status =
@@ -188,7 +188,7 @@ if (Astro.request.method === 'POST') {
                 const { error: usernameError } = await usernamesDto.insert(supabase, {
                   username_display: usernameDisplay,
                   username_normal: usernameNormal,
-                  profile_id: userId,
+                  user_id: userId,
                 });
                 if (usernameError) {
                   status =

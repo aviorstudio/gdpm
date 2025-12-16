@@ -22,17 +22,17 @@ export const orgsDto = {
 
 export type OrgProfileInsert = {
   org_id: string;
-  profile_id: string;
+  user_id: string;
   admin?: boolean;
 };
 
 export const orgsProfilesDto = {
   insert: (client: SupabaseClient, payload: OrgProfileInsert) =>
     client.from('orgs_profiles').insert(payload).select('*').maybeSingle(),
-  getByOrgIdAndProfileId: (client: SupabaseClient, orgId: string, profileId: string) =>
-    client.from('orgs_profiles').select('*').eq('org_id', orgId).eq('profile_id', profileId).maybeSingle(),
-  listByProfileId: (client: SupabaseClient, profileId: string) =>
-    client.from('orgs_profiles').select('org_id,admin,created_at').eq('profile_id', profileId).order('created_at', {
+  getByOrgIdAndUserId: (client: SupabaseClient, orgId: string, userId: string) =>
+    client.from('orgs_profiles').select('*').eq('org_id', orgId).eq('user_id', userId).maybeSingle(),
+  listByUserId: (client: SupabaseClient, userId: string) =>
+    client.from('orgs_profiles').select('org_id,admin,created_at').eq('user_id', userId).order('created_at', {
       ascending: false,
     }),
 };
@@ -40,24 +40,23 @@ export const orgsProfilesDto = {
 export type UsernameInsert = {
   username_display: string;
   username_normal: string;
-  profile_id?: string | null;
+  user_id?: string | null;
   org_id?: string | null;
 };
 
 export const usernamesDto = {
   insert: (client: SupabaseClient, payload: UsernameInsert) => client.from('usernames').insert(payload),
-  getByProfileId: (client: SupabaseClient, profileId: string) =>
-    client.from('usernames').select('*').eq('profile_id', profileId),
-  listByProfileIds: (client: SupabaseClient, profileIds: string[]) =>
-    client.from('usernames').select('username_display,profile_id,org_id').in('profile_id', profileIds),
+  getByUserId: (client: SupabaseClient, userId: string) => client.from('usernames').select('*').eq('user_id', userId),
+  listByUserIds: (client: SupabaseClient, userIds: string[]) =>
+    client.from('usernames').select('username_display,user_id,org_id').in('user_id', userIds),
   listByOrgIds: (client: SupabaseClient, orgIds: string[]) =>
-    client.from('usernames').select('username_display,profile_id,org_id').in('org_id', orgIds),
+    client.from('usernames').select('username_display,user_id,org_id').in('org_id', orgIds),
   getByUsernameNormal: (client: SupabaseClient, usernameNormal: string) =>
     client.from('usernames').select('*').eq('username_normal', usernameNormal).maybeSingle(),
 };
 
 export type PluginInsert = {
-  profile_id?: string | null;
+  user_id?: string | null;
   org_id?: string | null;
   name: string;
   repo: string;
@@ -70,7 +69,7 @@ export const pluginsDto = {
   listAll: async (client: SupabaseClient) => {
     const withPath = await client
       .from('plugins')
-      .select('id,name,repo,path,created_at,profile_id,org_id')
+      .select('id,name,repo,path,created_at,user_id,org_id')
       .order('created_at', { ascending: false });
     if (!withPath.error) return withPath;
 
@@ -78,17 +77,17 @@ export const pluginsDto = {
     if (msg.includes('path') && (msg.includes('does not exist') || msg.includes('could not find') || msg.includes('schema cache'))) {
       return client
         .from('plugins')
-        .select('id,name,repo,created_at,profile_id,org_id')
+        .select('id,name,repo,created_at,user_id,org_id')
         .order('created_at', { ascending: false });
     }
     return withPath;
   },
-  listByProfileId: (client: SupabaseClient, profileId: string) =>
-    client.from('plugins').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
+  listByUserId: (client: SupabaseClient, userId: string) =>
+    client.from('plugins').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
   listByOrgId: (client: SupabaseClient, orgId: string) =>
     client.from('plugins').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-  getByProfileIdAndName: (client: SupabaseClient, profileId: string, name: string) =>
-    client.from('plugins').select('*').eq('profile_id', profileId).eq('name', name).maybeSingle(),
+  getByUserIdAndName: (client: SupabaseClient, userId: string, name: string) =>
+    client.from('plugins').select('*').eq('user_id', userId).eq('name', name).maybeSingle(),
   getByOrgIdAndName: (client: SupabaseClient, orgId: string, name: string) =>
     client.from('plugins').select('*').eq('org_id', orgId).eq('name', name).maybeSingle(),
 };

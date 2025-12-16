@@ -60,14 +60,14 @@ func (c *Client) ResolvePlugin(ctx context.Context, username, plugin, requestedV
 	if !ok {
 		return ResolvedPlugin{}, fmt.Errorf("owner not found: @%s", usernameNormal)
 	}
-	if userRow.ProfileID != nil && userRow.OrgID != nil {
+	if userRow.UserID != nil && userRow.OrgID != nil {
 		return ResolvedPlugin{}, fmt.Errorf("username is assigned to multiple owners: @%s", usernameNormal)
 	}
-	if userRow.ProfileID == nil && userRow.OrgID == nil {
+	if userRow.UserID == nil && userRow.OrgID == nil {
 		return ResolvedPlugin{}, fmt.Errorf("owner not found: @%s", usernameNormal)
 	}
 
-	pluginRow, ok, err := c.getPluginByOwnerAndName(ctx, userRow.ProfileID, userRow.OrgID, pluginName)
+	pluginRow, ok, err := c.getPluginByOwnerAndName(ctx, userRow.UserID, userRow.OrgID, pluginName)
 	if err != nil {
 		return ResolvedPlugin{}, err
 	}
@@ -124,7 +124,7 @@ func (c *Client) ResolvePlugin(ctx context.Context, username, plugin, requestedV
 
 type usernameRow struct {
 	UsernameDisplay *string `json:"username_display"`
-	ProfileID       *string `json:"profile_id"`
+	UserID          *string `json:"user_id"`
 	OrgID           *string `json:"org_id"`
 }
 
@@ -134,7 +134,7 @@ type pluginRow struct {
 	Repo      string  `json:"repo"`
 	Path      *string `json:"path"`
 	CreatedAt *string `json:"created_at"`
-	ProfileID *string `json:"profile_id"`
+	UserID    *string `json:"user_id"`
 	OrgID     *string `json:"org_id"`
 }
 
@@ -149,7 +149,7 @@ type versionRow struct {
 
 func (c *Client) getUsernameByNormal(ctx context.Context, usernameNormal string) (usernameRow, bool, error) {
 	q := url.Values{}
-	q.Set("select", "username_display,profile_id,org_id")
+	q.Set("select", "username_display,user_id,org_id")
 	q.Set("username_normal", "eq."+usernameNormal)
 	q.Set("limit", "2")
 
@@ -166,18 +166,18 @@ func (c *Client) getUsernameByNormal(ctx context.Context, usernameNormal string)
 	return rows[0], true, nil
 }
 
-func (c *Client) getPluginByOwnerAndName(ctx context.Context, profileID, orgID *string, pluginName string) (pluginRow, bool, error) {
+func (c *Client) getPluginByOwnerAndName(ctx context.Context, userID, orgID *string, pluginName string) (pluginRow, bool, error) {
 	q := url.Values{}
-	selectWithPath := "id,name,repo,path,created_at,profile_id,org_id"
-	selectLegacy := "id,name,repo,created_at,profile_id,org_id"
+	selectWithPath := "id,name,repo,path,created_at,user_id,org_id"
+	selectLegacy := "id,name,repo,created_at,user_id,org_id"
 	q.Set("select", selectWithPath)
 	q.Set("name", "eq."+pluginName)
 	q.Set("limit", "2")
 
 	if orgID != nil && strings.TrimSpace(*orgID) != "" {
 		q.Set("org_id", "eq."+strings.TrimSpace(*orgID))
-	} else if profileID != nil && strings.TrimSpace(*profileID) != "" {
-		q.Set("profile_id", "eq."+strings.TrimSpace(*profileID))
+	} else if userID != nil && strings.TrimSpace(*userID) != "" {
+		q.Set("user_id", "eq."+strings.TrimSpace(*userID))
 	} else {
 		return pluginRow{}, false, fmt.Errorf("owner has no id")
 	}

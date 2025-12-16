@@ -52,7 +52,7 @@ let accountHref = '/';
 let orgsHref = '/';
 let settingsHref = '/';
 if (profileId) {
-	const { data: usernameRows, error: usernameError } = await usernamesDto.getByProfileId(supabase, profileId);
+	const { data: usernameRows, error: usernameError } = await usernamesDto.getByUserId(supabase, profileId);
 	if (!usernameError) {
 		const usernameRecord = ((usernameRows as UsernameRecord[] | null) ?? []).find((row) => row.username_display);
 		usernameDisplayForProfile = usernameRecord?.username_display ?? '';
