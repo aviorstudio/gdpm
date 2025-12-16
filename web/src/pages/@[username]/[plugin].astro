@@ -8,7 +8,8 @@ import PluginList from '../../components/PluginList.astro';
 import Input from '../../components/Input.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../../lib/auth';
 import { pluginVersionsDto, pluginsDto, usernamesDto } from '../../lib/dtoService';
-import { toGitHubTreeUrl, toRepoUrl } from '../../lib/repo';
+import { toGitHubRepoRootUrl, toGitHubTreeUrl, toRepoUrl } from '../../lib/repo';
+import { formatSemverTripletFromNullable, parseSemverTriplet } from '../../lib/semver';
 import { supabase } from '../../lib/supabase';
 
 type UsernameRecord = {
@@ -21,12 +22,15 @@ type PluginRecord = {
   id: string;
   name: string | null;
   repo: string | null;
+  path: string | null;
   created_at: string | null;
 };
 
 type PluginVersionRecord = {
   plugin_id: string | null;
-  version: string | null;
+  major: number | null;
+  minor: number | null;
+  patch: number | null;
   sha: string | null;
   created_at: string | null;
 };
@@ -72,6 +76,7 @@ let plugin: {
   id: string;
   name: string;
   repo: string;
+  path: string;
   createdAt: string;
 } | null = null;
 
@@ -139,6 +144,7 @@ if (!usernameNormal || !pluginName) {
           id: pluginRecord.id,
           name: pluginRecord.name ?? pluginName,
           repo: pluginRecord.repo ?? '',
+          path: pluginRecord.path ?? '',
           createdAt: pluginRecord.created_at ?? '',
         };
 
@@ -163,17 +169,25 @@ if (!usernameNormal || !pluginName) {
               createStatus = 'Version and sha are required.';
               createTone = 'error';
             } else {
-              const { error: versionError } = await pluginVersionsDto.insert(supabase, {
-                plugin_id: plugin.id,
-                version: formVersion,
-                sha: formSha,
-              });
-
-              if (versionError) {
-                createStatus = versionError.message;
+              const versionTriplet = parseSemverTriplet(formVersion);
+              if (!versionTriplet) {
+                createStatus = 'Version must be in MAJOR.MINOR.PATCH format.';
                 createTone = 'error';
               } else {
-                return Astro.redirect(Astro.url.pathname);
+                const { error: versionError } = await pluginVersionsDto.insert(supabase, {
+                  plugin_id: plugin.id,
+                  major: versionTriplet.major,
+                  minor: versionTriplet.minor,
+                  patch: versionTriplet.patch,
+                  sha: formSha,
+                });
+
+                if (versionError) {
+                  createStatus = versionError.message;
+                  createTone = 'error';
+                } else {
+                  return Astro.redirect(Astro.url.pathname);
+                }
               }
             }
           }
@@ -187,7 +201,7 @@ if (!usernameNormal || !pluginName) {
         } else {
           versions = ((versionRows as PluginVersionRecord[] | null) ?? [])
             .map((row) => ({
-              version: row.version ?? '',
+              version: formatSemverTripletFromNullable(row),
               sha: row.sha ?? '',
               createdAt: row.created_at ?? '',
             }));
@@ -198,11 +212,11 @@ if (!usernameNormal || !pluginName) {
 }
 
 const ownerPath = `/@${ownerSlug}`;
-const repoUrl = plugin?.repo ? toRepoUrl(plugin.repo) : '';
+const repoUrl = plugin?.repo ? toGitHubRepoRootUrl(plugin.repo) || toRepoUrl(plugin.repo) : '';
 const repoLabel = repoUrl ? repoUrl.replace(/^https?:\/\//i, '') : '';
 const versionList = versions.map((version) => ({
   pluginLabel: version.version || 'Unknown version',
-  pluginHref: version.sha ? toGitHubTreeUrl(repoUrl, version.sha) : undefined,
+  pluginHref: version.sha ? toGitHubTreeUrl(repoUrl, version.sha, plugin?.path) : undefined,
   date: version.createdAt,
 }));
 ---

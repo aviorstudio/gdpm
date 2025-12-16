@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -74,7 +75,7 @@ func (c *Client) ResolveRefAndSHA(ctx context.Context, owner, repo, version stri
 }
 
 func (c *Client) DownloadZipball(ctx context.Context, owner, repo, sha, destPath string) error {
-	u := apiBaseURL + "/repos/" + path.Join(owner, repo) + "/zipball/" + sha
+	u := apiBaseURL + "/repos/" + path.Join(owner, repo) + "/zipball/" + url.PathEscape(sha)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err

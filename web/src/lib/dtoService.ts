@@ -35,16 +35,28 @@ export type PluginInsert = {
   org_id?: string | null;
   name: string;
   repo: string;
+  path?: string | null;
 };
 
 export const pluginsDto = {
   insert: (client: SupabaseClient, payload: PluginInsert) =>
     client.from('plugins').insert(payload).select('*').maybeSingle(),
-  listAll: (client: SupabaseClient) =>
-    client
+  listAll: async (client: SupabaseClient) => {
+    const withPath = await client
       .from('plugins')
-      .select('id,name,repo,created_at,profile_id,org_id')
-      .order('created_at', { ascending: false }),
+      .select('id,name,repo,path,created_at,profile_id,org_id')
+      .order('created_at', { ascending: false });
+    if (!withPath.error) return withPath;
+
+    const msg = (withPath.error.message ?? '').toLowerCase();
+    if (msg.includes('path') && (msg.includes('does not exist') || msg.includes('could not find') || msg.includes('schema cache'))) {
+      return client
+        .from('plugins')
+        .select('id,name,repo,created_at,profile_id,org_id')
+        .order('created_at', { ascending: false });
+    }
+    return withPath;
+  },
   listByProfileId: (client: SupabaseClient, profileId: string) =>
     client.from('plugins').select('*').eq('profile_id', profileId).order('created_at', { ascending: false }),
   listByOrgId: (client: SupabaseClient, orgId: string) =>
@@ -56,7 +68,7 @@ export const pluginsDto = {
 };
 
 export const pluginVersionsDto = {
-  insert: (client: SupabaseClient, payload: { plugin_id: string; version: string; sha: string }) =>
+  insert: (client: SupabaseClient, payload: { plugin_id: string; major: number; minor: number; patch: number; sha: string }) =>
     client.from('plugin_versions').insert(payload).select('*').maybeSingle(),
   listByPluginIds: (client: SupabaseClient, pluginIds: string[]) =>
     client

@@ -1,6 +1,6 @@
 # GDPM CLI
 
-Installs Godot addons from GitHub repositories into your project's `addons/` folder and tracks them in `gdpm.json`.
+Installs Godot addons from GitHub repositories (including monorepo subdirectories) into your project's `addons/` folder and tracks them in `gdpm.json`.
 
 `gdpm` expects the addon directory to contain a `plugin.cfg` at its root (so it can be enabled automatically in `project.godot`).
 
@@ -36,6 +36,10 @@ gdpm unlink @name
       "repo": "https://github.com/owner/repo/tree/<sha>",
       "version": "1.2.3",
       "link": "~/dev/plugin"
+    },
+    "@user/monorepo_plugin": {
+      "repo": "https://github.com/owner/monorepo/tree/<sha>/path/to/addon",
+      "version": "1.2.3"
     },
     "@user/other": {
       "link": "~/dev/other"

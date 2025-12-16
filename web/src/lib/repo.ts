@@ -23,14 +23,13 @@ export const toRepoUrl = (value: string) => {
   return sanitized ? `https://${sanitized}` : '';
 };
 
-export const toGitHubTreeUrl = (repoUrl: string, sha: string) => {
-  const repo = repoUrl.trim();
-  const commitSha = sha.trim();
-  if (!repo || !commitSha) return '';
+export const toGitHubRepoRootUrl = (repoUrl: string) => {
+  const normalized = toRepoUrl(repoUrl);
+  if (!normalized) return '';
 
   let url: URL;
   try {
-    url = new URL(repo);
+    url = new URL(normalized);
   } catch {
     return '';
   }
@@ -38,8 +37,26 @@ export const toGitHubTreeUrl = (repoUrl: string, sha: string) => {
   const hostname = url.hostname.toLowerCase();
   if (!hostname.endsWith('github.com')) return '';
 
-  const repoPath = url.pathname.replace(/\/+$/, '').replace(/\.git$/i, '');
-  if (!repoPath || repoPath === '/') return '';
+  const parts = url.pathname.replace(/\/+$/, '').replace(/\.git$/i, '').split('/').filter(Boolean);
+  if (parts.length < 2) return '';
 
-  return `${url.origin}${repoPath}/tree/${encodeURIComponent(commitSha)}`;
+  return `${url.origin}/${parts[0]}/${parts[1]}`;
+};
+
+export const toGitHubTreeUrl = (repoUrl: string, sha: string, repoSubdir?: string) => {
+  const repo = toGitHubRepoRootUrl(repoUrl);
+  const commitSha = sha.trim();
+  if (!repo || !commitSha) return '';
+  const base = `${repo}/tree/${encodeURIComponent(commitSha)}`;
+
+  const subdirRaw = String(repoSubdir ?? '').trim();
+  if (!subdirRaw) return base;
+
+  const normalized = subdirRaw.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').replace(/\/{2,}/g, '/');
+  if (!normalized || normalized === '.') return base;
+
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.some((part) => part === '.' || part === '..')) return base;
+
+  return `${base}/${parts.map(encodeURIComponent).join('/')}`;
 };

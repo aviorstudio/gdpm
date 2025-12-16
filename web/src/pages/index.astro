@@ -7,12 +7,14 @@ import Title from '../components/Title.astro';
 import PluginList from '../components/PluginList.astro';
 import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
+import { formatSemverTripletFromNullable } from '../lib/semver';
 import { supabase } from '../lib/supabase';
 
 type PluginRecord = {
   id: string;
   name: string | null;
   repo: string | null;
+  path: string | null;
   created_at: string | null;
   profile_id: string | null;
   org_id: string | null;
@@ -20,7 +22,9 @@ type PluginRecord = {
 
 type PluginVersionRecord = {
   plugin_id: string;
-  version: string | null;
+  major: number | null;
+  minor: number | null;
+  patch: number | null;
   sha: string | null;
   created_at: string | null;
 };
@@ -46,7 +50,7 @@ if (plugins.length > 0) {
     for (const row of (versionRows as PluginVersionRecord[] | null) ?? []) {
       if (!latestReleaseByPluginId.has(row.plugin_id)) {
         latestReleaseByPluginId.set(row.plugin_id, {
-          version: row.version ?? '',
+          version: formatSemverTripletFromNullable(row),
           sha: row.sha ?? '',
           createdAt: row.created_at ?? '',
         });
@@ -96,7 +100,7 @@ const pluginList = plugins.map((plugin) => {
   const latestRelease = latestReleaseByPluginId.get(plugin.id);
   const repoUrl = plugin.repo ? toRepoUrl(plugin.repo) : '';
   const versionLabel = latestRelease?.version ? latestRelease.version : 'No versions';
-  const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha) : '';
+  const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha, plugin.path ?? undefined) : '';
 
   return {
     ownerLabel: ownerDisplay ? `@${ownerDisplay}` : undefined,

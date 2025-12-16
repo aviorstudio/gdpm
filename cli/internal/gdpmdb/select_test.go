@@ -4,8 +4,8 @@ import "testing"
 
 func TestSelectVersionRequested(t *testing.T) {
 	rows := []versionRow{
-		{Version: "0.1.0", SHA: "aaa"},
-		{Version: "0.2.0", SHA: "bbb"},
+		{Major: 0, Minor: 1, Patch: 0, SHA: "aaa"},
+		{Major: 0, Minor: 2, Patch: 0, SHA: "bbb"},
 	}
 
 	got, ok := selectVersion(rows, "0.2.0")
@@ -19,9 +19,9 @@ func TestSelectVersionRequested(t *testing.T) {
 
 func TestSelectVersionLatestSemver(t *testing.T) {
 	rows := []versionRow{
-		{Version: "0.1.0", SHA: "aaa"},
-		{Version: "0.2.0", SHA: "bbb"},
-		{Version: "0.10.0", SHA: "ccc"},
+		{Major: 0, Minor: 1, Patch: 0, SHA: "aaa"},
+		{Major: 0, Minor: 2, Patch: 0, SHA: "bbb"},
+		{Major: 0, Minor: 10, Patch: 0, SHA: "ccc"},
 	}
 
 	got, ok := selectVersion(rows, "")
