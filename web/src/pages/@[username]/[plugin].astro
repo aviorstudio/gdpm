@@ -7,15 +7,19 @@ import Title from '../../components/Title.astro';
 import PluginList from '../../components/PluginList.astro';
 import Input from '../../components/Input.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../../lib/auth';
-import { pluginVersionsDto, pluginsDto, usernamesDto } from '../../lib/dtoService';
+import { orgsProfilesDto, pluginVersionsDto, pluginsDto, usernamesDto } from '../../lib/dtoService';
 import { toGitHubRepoRootUrl, toGitHubTreeUrl, toRepoUrl } from '../../lib/repo';
 import { formatSemverTripletFromNullable, parseSemverTriplet } from '../../lib/semver';
 import { supabase } from '../../lib/supabase';
 
 type UsernameRecord = {
   username_display: string | null;
-  profile_id: string | null;
+  user_id: string | null;
   org_id: string | null;
+};
+
+type OrgsProfileRecord = {
+  admin: boolean | null;
 };
 
 type PluginRecord = {
@@ -109,9 +113,26 @@ if (!usernameNormal || !pluginName) {
     ownerLabel = `@${usernameDisplay}`;
     ownerSlug = encodeURIComponent(usernameDisplay);
 
-    const ownerProfileId = usernameRecord.profile_id;
+    const ownerProfileId = usernameRecord.user_id;
     const ownerOrgId = usernameRecord.org_id;
-    canCreateRelease = Boolean(ownerProfileId && profileId && ownerProfileId === profileId);
+
+    let canPublishForOrg = false;
+    if (ownerOrgId && profileId) {
+      const { data: membershipRow, error: membershipError } = await orgsProfilesDto.getByOrgIdAndUserId(
+        supabase,
+        ownerOrgId,
+        profileId
+      );
+      if (!membershipError && membershipRow) {
+        const membershipRecord = membershipRow as OrgsProfileRecord;
+        canPublishForOrg = Boolean(membershipRecord.admin);
+      }
+    }
+
+    canCreateRelease = Boolean(
+      (ownerProfileId && profileId && ownerProfileId === profileId) ||
+      (ownerOrgId && canPublishForOrg)
+    );
 
     if (showCreateReleaseDialog && !canCreateRelease) {
       Astro.response.status = 403;
@@ -129,7 +150,7 @@ if (!usernameNormal || !pluginName) {
     } else {
       const { data: pluginRow, error: pluginError } = ownerOrgId
         ? await pluginsDto.getByOrgIdAndName(supabase, ownerOrgId, pluginName)
-        : await pluginsDto.getByProfileIdAndName(supabase, ownerProfileId ?? '', pluginName);
+        : await pluginsDto.getByUserIdAndName(supabase, ownerProfileId ?? '', pluginName);
 
       if (pluginError) {
         Astro.response.status = 500;

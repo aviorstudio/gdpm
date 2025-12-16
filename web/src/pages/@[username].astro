@@ -7,15 +7,19 @@ import Title from '../components/Title.astro';
 import PluginList from '../components/PluginList.astro';
 import Input from '../components/Input.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../lib/auth';
-import { pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
+import { orgsProfilesDto, pluginVersionsDto, pluginsDto, usernamesDto } from '../lib/dtoService';
 import { toGitHubTreeUrl, toRepoUrl } from '../lib/repo';
 import { formatSemverTripletFromNullable, parseSemverTriplet } from '../lib/semver';
 import { supabase } from '../lib/supabase';
 
 type UsernameRecord = {
   username_display: string | null;
-  profile_id: string | null;
+  user_id: string | null;
   org_id: string | null;
+};
+
+type OrgsProfileRecord = {
+  admin: boolean | null;
 };
 
 type PluginRecord = {
@@ -159,7 +163,7 @@ if (!usernameNormal) {
     const usernameRecord = usernameRow as UsernameRecord;
     const usernameDisplay = usernameRecord.username_display || usernameParam;
 
-    const ownerProfileId = usernameRecord.profile_id;
+    const ownerProfileId = usernameRecord.user_id;
     const ownerOrgId = usernameRecord.org_id;
 
     if (ownerProfileId && ownerOrgId) {
@@ -175,7 +179,24 @@ if (!usernameNormal) {
       entitySlug = encodeURIComponent(usernameDisplay);
       githubUserUrl = `https://github.com/${encodeURIComponent(usernameDisplay)}`;
       githubUserLabel = `github.com/${usernameDisplay}`;
-      canCreatePlugin = Boolean(ownerProfileId && profileId && ownerProfileId === profileId);
+
+      let canPublishForOrg = false;
+      if (ownerOrgId && profileId) {
+        const { data: membershipRow, error: membershipError } = await orgsProfilesDto.getByOrgIdAndUserId(
+          supabase,
+          ownerOrgId,
+          profileId
+        );
+        if (!membershipError && membershipRow) {
+          const membershipRecord = membershipRow as OrgsProfileRecord;
+          canPublishForOrg = Boolean(membershipRecord.admin);
+        }
+      }
+
+      canCreatePlugin = Boolean(
+        (ownerProfileId && profileId && ownerProfileId === profileId) ||
+        (ownerOrgId && canPublishForOrg)
+      );
 
       if (showCreatePluginDialog && !canCreatePlugin) {
         Astro.response.status = 403;
@@ -221,9 +242,12 @@ if (!usernameNormal) {
                 formRepo = normalized.repo;
                 formPath = normalized.path;
 
+                const pluginOwnerPayload = ownerOrgId
+                  ? { user_id: null, org_id: ownerOrgId }
+                  : { user_id: ownerProfileId, org_id: null };
+
                 const { data: createdPlugin, error: pluginError } = await pluginsDto.insert(supabase, {
-                  profile_id: ownerProfileId,
-                  org_id: null,
+                  ...pluginOwnerPayload,
                   name: formName,
                   repo: formRepo,
                   ...(formPath ? { path: formPath } : {}),
@@ -259,7 +283,7 @@ if (!usernameNormal) {
 
       const { data: pluginsData, error: pluginsError } = ownerOrgId
         ? await pluginsDto.listByOrgId(supabase, ownerOrgId)
-        : await pluginsDto.listByProfileId(supabase, ownerProfileId ?? '');
+        : await pluginsDto.listByUserId(supabase, ownerProfileId ?? '');
 
       if (pluginsError) {
         Astro.response.status = 500;

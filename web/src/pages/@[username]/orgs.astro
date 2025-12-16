@@ -1,0 +1,122 @@
+---
+export const prerender = false;
+
+import RootLayout from '../../layouts/RootLayout.astro';
+import Title from '../../components/Title.astro';
+import PluginList from '../../components/PluginList.astro';
+import { getSessionFromCookies } from '../../lib/auth';
+import { orgsProfilesDto, usernamesDto } from '../../lib/dtoService';
+import { supabase } from '../../lib/supabase';
+
+type UsernameRecord = {
+  username_display: string | null;
+  user_id: string | null;
+  org_id: string | null;
+};
+
+type OrgsProfileRecord = {
+  org_id: string | null;
+  admin: boolean | null;
+  created_at: string | null;
+};
+
+const safeDecodeURIComponent = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
+
+const usernameParamRaw = Astro.params.username ?? '';
+const usernameParam = safeDecodeURIComponent(usernameParamRaw);
+const usernameNormal = normalizeUsername(usernameParam);
+
+const publicPath = Astro.url.pathname.replace(/\/orgs\/?$/, '') || '/';
+
+const session = await getSessionFromCookies(Astro.cookies);
+if (!session) {
+  return Astro.redirect(publicPath);
+}
+
+const profileId = session.user?.id ?? '';
+if (!profileId || !usernameNormal) {
+  return Astro.redirect(publicPath);
+}
+
+const { data: usernameRow, error: usernameError } = await usernamesDto.getByUsernameNormal(supabase, usernameNormal);
+if (usernameError || !usernameRow) {
+  return Astro.redirect(publicPath);
+}
+
+const usernameRecord = usernameRow as UsernameRecord;
+if (!usernameRecord.user_id || usernameRecord.user_id !== profileId) {
+  return Astro.redirect(publicPath);
+}
+
+const usernameDisplay = usernameRecord.username_display || usernameParam;
+
+let status = '';
+let tone: 'muted' | 'error' = 'muted';
+let orgItems: Array<{
+  pluginLabel: string;
+  pluginHref?: string;
+  metaLabel?: string;
+  date?: string;
+}> = [];
+
+const { data: membershipRows, error: membershipError } = await orgsProfilesDto.listByUserId(supabase, profileId);
+if (membershipError) {
+  status = membershipError.message;
+  tone = 'error';
+} else {
+  const memberships = (membershipRows as OrgsProfileRecord[] | null) ?? [];
+  const orgIds = Array.from(new Set(memberships.map((row) => row.org_id).filter(Boolean) as string[]));
+
+  const usernameByOrgId = new Map<string, string>();
+  if (orgIds.length > 0) {
+    const { data: usernameRows, error: usernameListError } = await usernamesDto.listByOrgIds(supabase, orgIds);
+    if (usernameListError) {
+      status = usernameListError.message;
+      tone = 'error';
+    } else {
+      for (const row of (usernameRows as UsernameRecord[] | null) ?? []) {
+        if (!row.org_id || !row.username_display) continue;
+        if (!usernameByOrgId.has(row.org_id)) {
+          usernameByOrgId.set(row.org_id, row.username_display);
+        }
+      }
+    }
+  }
+
+  orgItems = memberships
+    .filter((membership) => membership.org_id)
+    .map((membership) => {
+      const orgId = membership.org_id as string;
+      const orgUsername = usernameByOrgId.get(orgId) ?? '';
+      const orgLabel = orgUsername ? `@${orgUsername}` : orgId;
+      const orgHref = orgUsername ? `/@${encodeURIComponent(orgUsername)}` : undefined;
+      return {
+        pluginLabel: orgLabel,
+        pluginHref: orgHref,
+        metaLabel: membership.admin ? 'Admin' : 'Member',
+        date: membership.created_at ?? undefined,
+      };
+    });
+}
+---
+
+<RootLayout>
+  <Title title="Orgs" subtitle={`Organizations for @${usernameDisplay}.`} />
+
+  <PluginList
+    items={orgItems}
+    status={status}
+    tone={tone}
+    hideBodyWhenError
+    emptyTitle="No orgs yet"
+    emptySubtitle="Create an org from Settings to get started."
+  />
+</RootLayout>

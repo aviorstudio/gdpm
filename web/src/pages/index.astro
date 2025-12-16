@@ -16,7 +16,7 @@ type PluginRecord = {
   repo: string | null;
   path: string | null;
   created_at: string | null;
-  profile_id: string | null;
+  user_id: string | null;
   org_id: string | null;
 };
 
@@ -31,7 +31,7 @@ type PluginVersionRecord = {
 
 type UsernameRecord = {
   username_display: string | null;
-  profile_id: string | null;
+  user_id: string | null;
   org_id: string | null;
 };
 
@@ -59,17 +59,17 @@ if (plugins.length > 0) {
   }
 }
 
-const profileIds = Array.from(new Set(plugins.map((plugin) => plugin.profile_id).filter(Boolean) as string[]));
+const userIds = Array.from(new Set(plugins.map((plugin) => plugin.user_id).filter(Boolean) as string[]));
 const orgIds = Array.from(new Set(plugins.map((plugin) => plugin.org_id).filter(Boolean) as string[]));
 
-const usernameByProfileId = new Map<string, string>();
-if (profileIds.length > 0) {
-  const { data: usernameRows, error: usernameError } = await usernamesDto.listByProfileIds(supabase, profileIds);
+const usernameByUserId = new Map<string, string>();
+if (userIds.length > 0) {
+  const { data: usernameRows, error: usernameError } = await usernamesDto.listByUserIds(supabase, userIds);
   if (!usernameError) {
     for (const row of (usernameRows as UsernameRecord[] | null) ?? []) {
-      if (!row.profile_id || !row.username_display) continue;
-      if (!usernameByProfileId.has(row.profile_id)) {
-        usernameByProfileId.set(row.profile_id, row.username_display);
+      if (!row.user_id || !row.username_display) continue;
+      if (!usernameByUserId.has(row.user_id)) {
+        usernameByUserId.set(row.user_id, row.username_display);
       }
     }
   }
@@ -89,8 +89,8 @@ if (orgIds.length > 0) {
 }
 
 const pluginList = plugins.map((plugin) => {
-  const ownerDisplay = plugin.profile_id
-    ? usernameByProfileId.get(plugin.profile_id) ?? ''
+  const ownerDisplay = plugin.user_id
+    ? usernameByUserId.get(plugin.user_id) ?? ''
     : plugin.org_id
       ? usernameByOrgId.get(plugin.org_id) ?? ''
       : '';
