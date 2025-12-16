@@ -38,8 +38,9 @@ type ResolvedPlugin struct {
 	Name string
 	Repo string
 
-	GitHubOwner string
-	GitHubRepo  string
+	GitHubOwner  string
+	GitHubRepo   string
+	GitHubSubdir string
 
 	Version string
 	SHA     string
@@ -85,7 +86,8 @@ func (c *Client) ResolvePlugin(ctx context.Context, username, plugin, requestedV
 	if !ok {
 		return ResolvedPlugin{}, fmt.Errorf("version not found: %s", requestedVersion)
 	}
-	if strings.TrimSpace(selected.SHA) == "" {
+	sha := strings.TrimSpace(selected.SHA)
+	if sha == "" {
 		return ResolvedPlugin{}, fmt.Errorf(
 			"selected version has no sha: %d.%d.%d",
 			selected.Major,
@@ -94,18 +96,29 @@ func (c *Client) ResolvePlugin(ctx context.Context, username, plugin, requestedV
 		)
 	}
 
-	ghOwner, ghRepo, err := ParseGitHubOwnerRepo(pluginRow.Repo)
+	ghOwner, ghRepo, repoSubdir, err := ParseGitHubRepoURL(pluginRow.Repo)
 	if err != nil {
 		return ResolvedPlugin{}, err
 	}
 
+	ghSubdir := repoSubdir
+	if pluginRow.Path != nil {
+		repoPath := strings.TrimSpace(*pluginRow.Path)
+		if repoPath != "" {
+			repoPath = strings.ReplaceAll(repoPath, "\\", "/")
+			repoPath = strings.Trim(repoPath, "/")
+			ghSubdir = repoPath
+		}
+	}
+
 	return ResolvedPlugin{
-		Name:        "@" + usernameNormal + "/" + pluginName,
-		Repo:        pluginRow.Repo,
-		GitHubOwner: ghOwner,
-		GitHubRepo:  ghRepo,
-		Version:     fmt.Sprintf("%d.%d.%d", selected.Major, selected.Minor, selected.Patch),
-		SHA:         selected.SHA,
+		Name:         "@" + usernameNormal + "/" + pluginName,
+		Repo:         pluginRow.Repo,
+		GitHubOwner:  ghOwner,
+		GitHubRepo:   ghRepo,
+		GitHubSubdir: ghSubdir,
+		Version:      fmt.Sprintf("%d.%d.%d", selected.Major, selected.Minor, selected.Patch),
+		SHA:          sha,
 	}, nil
 }
 
@@ -119,6 +132,7 @@ type pluginRow struct {
 	ID        string  `json:"id"`
 	Name      *string `json:"name"`
 	Repo      string  `json:"repo"`
+	Path      *string `json:"path"`
 	CreatedAt *string `json:"created_at"`
 	ProfileID *string `json:"profile_id"`
 	OrgID     *string `json:"org_id"`
@@ -154,7 +168,9 @@ func (c *Client) getUsernameByNormal(ctx context.Context, usernameNormal string)
 
 func (c *Client) getPluginByOwnerAndName(ctx context.Context, profileID, orgID *string, pluginName string) (pluginRow, bool, error) {
 	q := url.Values{}
-	q.Set("select", "id,name,repo,created_at,profile_id,org_id")
+	selectWithPath := "id,name,repo,path,created_at,profile_id,org_id"
+	selectLegacy := "id,name,repo,created_at,profile_id,org_id"
+	q.Set("select", selectWithPath)
 	q.Set("name", "eq."+pluginName)
 	q.Set("limit", "2")
 
@@ -168,7 +184,17 @@ func (c *Client) getPluginByOwnerAndName(ctx context.Context, profileID, orgID *
 
 	var rows []pluginRow
 	if err := c.get(ctx, "plugins", q, &rows); err != nil {
-		return pluginRow{}, false, err
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "path") &&
+			(strings.Contains(errMsg, "does not exist") || strings.Contains(errMsg, "could not find") || strings.Contains(errMsg, "schema cache")) {
+			q.Set("select", selectLegacy)
+			rows = nil
+			if err2 := c.get(ctx, "plugins", q, &rows); err2 != nil {
+				return pluginRow{}, false, err2
+			}
+		} else {
+			return pluginRow{}, false, err
+		}
 	}
 	if len(rows) == 0 {
 		return pluginRow{}, false, nil

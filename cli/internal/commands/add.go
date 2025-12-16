@@ -79,6 +79,11 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return err
 	}
 
+	pkgRootDir, err := repoSubdirRoot(rootDir, resolved.GitHubSubdir)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	}
+
 	localAddonsDir := filepath.Join(projectDir, "addons")
 	if err := os.MkdirAll(localAddonsDir, 0o755); err != nil {
 		return err
@@ -93,10 +98,13 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return err
 	}
 
-	if ok, err := pluginCfgExistsAtDirRoot(rootDir); err != nil {
+	if ok, err := pluginCfgExistsAtDirRoot(pkgRootDir); err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	} else if !ok {
 		expected := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+		if strings.TrimSpace(resolved.GitHubSubdir) != "" {
+			return fmt.Errorf("%w: package is missing plugin.cfg at %s in repository (expected to install it to %s)", ErrUserInput, resolved.GitHubSubdir, expected)
+		}
 		return fmt.Errorf("%w: package is missing plugin.cfg at repository root (expected to install it to %s)", ErrUserInput, expected)
 	}
 
@@ -113,7 +121,7 @@ func Add(ctx context.Context, opts AddOptions) error {
 		}
 	}
 
-	if err := fsutil.CopyPath(rootDir, dst); err != nil {
+	if err := fsutil.CopyPath(pkgRootDir, dst); err != nil {
 		return err
 	}
 
@@ -126,7 +134,7 @@ func Add(ctx context.Context, opts AddOptions) error {
 	}
 
 	m = manifest.UpsertPlugin(m, pkg.Name(), manifest.Plugin{
-		Repo:    gdpmdb.GitHubTreeURL(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA),
+		Repo:    gdpmdb.GitHubTreeURLWithPath(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA, resolved.GitHubSubdir),
 		Version: resolved.Version,
 		Link:    "",
 	})

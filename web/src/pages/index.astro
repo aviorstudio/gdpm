@@ -14,6 +14,7 @@ type PluginRecord = {
   id: string;
   name: string | null;
   repo: string | null;
+  path: string | null;
   created_at: string | null;
   profile_id: string | null;
   org_id: string | null;
@@ -99,7 +100,7 @@ const pluginList = plugins.map((plugin) => {
   const latestRelease = latestReleaseByPluginId.get(plugin.id);
   const repoUrl = plugin.repo ? toRepoUrl(plugin.repo) : '';
   const versionLabel = latestRelease?.version ? latestRelease.version : 'No versions';
-  const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha) : '';
+  const treeUrl = latestRelease?.sha ? toGitHubTreeUrl(repoUrl, latestRelease.sha, plugin.path ?? undefined) : '';
 
   return {
     ownerLabel: ownerDisplay ? `@${ownerDisplay}` : undefined,

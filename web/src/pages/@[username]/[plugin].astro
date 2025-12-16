@@ -8,7 +8,7 @@ import PluginList from '../../components/PluginList.astro';
 import Input from '../../components/Input.astro';
 import { getSessionFromCookies, hasAuthCookies } from '../../lib/auth';
 import { pluginVersionsDto, pluginsDto, usernamesDto } from '../../lib/dtoService';
-import { toGitHubTreeUrl, toRepoUrl } from '../../lib/repo';
+import { toGitHubRepoRootUrl, toGitHubTreeUrl, toRepoUrl } from '../../lib/repo';
 import { formatSemverTripletFromNullable, parseSemverTriplet } from '../../lib/semver';
 import { supabase } from '../../lib/supabase';
 
@@ -22,6 +22,7 @@ type PluginRecord = {
   id: string;
   name: string | null;
   repo: string | null;
+  path: string | null;
   created_at: string | null;
 };
 
@@ -75,6 +76,7 @@ let plugin: {
   id: string;
   name: string;
   repo: string;
+  path: string;
   createdAt: string;
 } | null = null;
 
@@ -142,6 +144,7 @@ if (!usernameNormal || !pluginName) {
           id: pluginRecord.id,
           name: pluginRecord.name ?? pluginName,
           repo: pluginRecord.repo ?? '',
+          path: pluginRecord.path ?? '',
           createdAt: pluginRecord.created_at ?? '',
         };
 
@@ -209,11 +212,11 @@ if (!usernameNormal || !pluginName) {
 }
 
 const ownerPath = `/@${ownerSlug}`;
-const repoUrl = plugin?.repo ? toRepoUrl(plugin.repo) : '';
+const repoUrl = plugin?.repo ? toGitHubRepoRootUrl(plugin.repo) || toRepoUrl(plugin.repo) : '';
 const repoLabel = repoUrl ? repoUrl.replace(/^https?:\/\//i, '') : '';
 const versionList = versions.map((version) => ({
   pluginLabel: version.version || 'Unknown version',
-  pluginHref: version.sha ? toGitHubTreeUrl(repoUrl, version.sha) : undefined,
+  pluginHref: version.sha ? toGitHubTreeUrl(repoUrl, version.sha, plugin?.path) : undefined,
   date: version.createdAt,
 }));
 ---

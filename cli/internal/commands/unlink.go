@@ -102,7 +102,7 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 		return nil
 	}
 
-	ghOwner, ghRepo, ref, err := gdpmdb.ParseGitHubTreeURL(plugin.Repo)
+	ghOwner, ghRepo, ref, repoSubdir, err := gdpmdb.ParseGitHubTreeURLWithPath(plugin.Repo)
 	if err != nil {
 		return err
 	}
@@ -125,10 +125,18 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 		return err
 	}
 
-	if ok, err := pluginCfgExistsAtDirRoot(rootDir); err != nil {
+	pkgRootDir, err := repoSubdirRoot(rootDir, repoSubdir)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	}
+
+	if ok, err := pluginCfgExistsAtDirRoot(pkgRootDir); err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	} else if !ok {
 		expected := "res://" + path.Join("addons", addonDirName, "plugin.cfg")
+		if strings.TrimSpace(repoSubdir) != "" {
+			return fmt.Errorf("%w: package is missing plugin.cfg at %s in repository (expected to install it to %s)", ErrUserInput, repoSubdir, expected)
+		}
 		return fmt.Errorf("%w: package is missing plugin.cfg at repository root (expected to install it to %s)", ErrUserInput, expected)
 	}
 
@@ -141,7 +149,7 @@ func Unlink(ctx context.Context, opts UnlinkOptions) error {
 		return err
 	}
 
-	if err := fsutil.CopyPath(rootDir, dst); err != nil {
+	if err := fsutil.CopyPath(pkgRootDir, dst); err != nil {
 		return err
 	}
 
