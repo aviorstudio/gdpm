@@ -27,7 +27,12 @@ func TestLink_ReplacesLegacyEditorPluginEntryForSameLocalPath(t *testing.T) {
 	}
 
 	m := manifest.New()
-	m = manifest.UpsertPlugin(m, "@local_plugin", manifest.Plugin{Link: pluginDir})
+	m = manifest.UpsertPlugin(m, "@local_plugin", manifest.Plugin{
+		Link: &manifest.Link{
+			Enabled: true,
+			Path:    pluginDir,
+		},
+	})
 	if err := manifest.Save(filepath.Join(projectDir, "gdpm.json"), m); err != nil {
 		t.Fatalf("write gdpm.json: %v", err)
 	}
@@ -133,8 +138,14 @@ func TestLink_OverwritesExistingAddonsDirWhenNotInManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read gdpm.json: %v", err)
 	}
-	if got := m2.Plugins["@user/plugin"].Link; got != pluginDir {
-		t.Fatalf("expected gdpm.json link %q, got %q", pluginDir, got)
+	if m2.Plugins["@user/plugin"].Link == nil {
+		t.Fatalf("expected gdpm.json link to be set")
+	}
+	if got := m2.Plugins["@user/plugin"].Link.Path; got != pluginDir {
+		t.Fatalf("expected gdpm.json link.path %q, got %q", pluginDir, got)
+	}
+	if got := m2.Plugins["@user/plugin"].Link.Enabled; got != true {
+		t.Fatalf("expected gdpm.json link.enabled=true, got %v", got)
 	}
 }
 
@@ -195,5 +206,116 @@ func TestLink_DisablesLegacyEditorPluginEntryDerivedFromPath(t *testing.T) {
 	}
 	if !strings.Contains(out, "res://addons/@aviorstudio_gd-playwright/autoload.gd") {
 		t.Fatalf("expected updated autoload path, got:\n%s", out)
+	}
+}
+
+func TestLink_UsesStoredPathWhenNoPathProvided(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows (symlink/junction behavior varies by environment)")
+	}
+
+	projectDir := t.TempDir()
+
+	pluginDir := filepath.Join(projectDir, "local_plugin")
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.cfg"), []byte("[plugin]\nname=\"Test\"\n"), 0o644); err != nil {
+		t.Fatalf("write plugin.cfg: %v", err)
+	}
+
+	m := manifest.New()
+	m = manifest.UpsertPlugin(m, "@user/plugin", manifest.Plugin{
+		Link: &manifest.Link{
+			Enabled: false,
+			Path:    pluginDir,
+		},
+	})
+	if err := manifest.Save(filepath.Join(projectDir, "gdpm.json"), m); err != nil {
+		t.Fatalf("write gdpm.json: %v", err)
+	}
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(oldWd)
+	}()
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	if err := Link(context.Background(), LinkOptions{
+		Spec: "@user/plugin",
+	}); err != nil {
+		t.Fatalf("link: %v", err)
+	}
+
+	addonDirName, err := addonDirNameForPluginKey("@user/plugin")
+	if err != nil {
+		t.Fatalf("addonDirNameForPluginKey: %v", err)
+	}
+	dst := filepath.Join(projectDir, "addons", addonDirName)
+	if info, err := os.Lstat(dst); err != nil {
+		t.Fatalf("lstat dst: %v", err)
+	} else if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("expected dst to be symlink, got mode %v", info.Mode())
+	}
+	if resolved, err := filepath.EvalSymlinks(dst); err != nil {
+		t.Fatalf("EvalSymlinks dst: %v", err)
+	} else {
+		expected := pluginDir
+		if expectedResolved, err := filepath.EvalSymlinks(pluginDir); err == nil {
+			expected = expectedResolved
+		}
+		if filepath.Clean(resolved) != filepath.Clean(expected) {
+			t.Fatalf("expected dst to resolve to %q, got %q", expected, resolved)
+		}
+	}
+
+	m2, err := manifest.Load(filepath.Join(projectDir, "gdpm.json"))
+	if err != nil {
+		t.Fatalf("read gdpm.json: %v", err)
+	}
+	if m2.Plugins["@user/plugin"].Link == nil {
+		t.Fatalf("expected gdpm.json link to be set")
+	}
+	if got := m2.Plugins["@user/plugin"].Link.Path; got != pluginDir {
+		t.Fatalf("expected gdpm.json link.path %q, got %q", pluginDir, got)
+	}
+	if got := m2.Plugins["@user/plugin"].Link.Enabled; got != true {
+		t.Fatalf("expected gdpm.json link.enabled=true, got %v", got)
+	}
+}
+
+func TestLink_RequiresPathWhenNoStoredPath(t *testing.T) {
+	projectDir := t.TempDir()
+
+	m := manifest.New()
+	m = manifest.UpsertPlugin(m, "@user/plugin", manifest.Plugin{
+		Link: &manifest.Link{
+			Enabled: false,
+		},
+	})
+	if err := manifest.Save(filepath.Join(projectDir, "gdpm.json"), m); err != nil {
+		t.Fatalf("write gdpm.json: %v", err)
+	}
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(oldWd)
+	}()
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	if err := Link(context.Background(), LinkOptions{
+		Spec: "@user/plugin",
+	}); err == nil {
+		t.Fatalf("expected error")
 	}
 }

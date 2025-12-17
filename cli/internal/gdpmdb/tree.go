@@ -3,7 +3,6 @@ package gdpmdb
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 )
 
@@ -36,8 +35,6 @@ func GitHubTreeURLWithPath(owner, repo, ref, repoPath string) string {
 	return base + "/" + strings.Join(escapedParts, "/")
 }
 
-var gitCommitSHARe = regexp.MustCompile(`^[a-fA-F0-9]{7,40}$`)
-
 func ParseGitHubTreeURLWithPath(treeURL string) (string, string, string, string, error) {
 	treeURL = strings.TrimSpace(treeURL)
 	if treeURL == "" {
@@ -54,27 +51,36 @@ func ParseGitHubTreeURLWithPath(treeURL string) (string, string, string, string,
 		return "", "", "", "", fmt.Errorf("only github.com tree urls are supported (got %s)", host)
 	}
 
-	p := strings.Trim(u.Path, "/")
+	p := strings.Trim(u.EscapedPath(), "/")
 	parts := strings.Split(p, "/")
 	if len(parts) < 4 || parts[0] == "" || parts[1] == "" || parts[2] != "tree" {
 		return "", "", "", "", fmt.Errorf("invalid github tree url (expected github.com/owner/repo/tree/ref): %s", treeURL)
 	}
 
-	refWithPathEscaped := strings.Join(parts[3:], "/")
-	refWithPath, err := url.PathUnescape(refWithPathEscaped)
+	ref, err := url.PathUnescape(parts[3])
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("invalid tree ref: %w", err)
 	}
-
-	refPart, repoPath, hasPath := strings.Cut(refWithPath, "/")
-	if gitCommitSHARe.MatchString(refPart) {
-		if hasPath {
-			repoPath = strings.Trim(repoPath, "/")
-		} else {
-			repoPath = ""
-		}
-		return parts[0], parts[1], refPart, repoPath, nil
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return "", "", "", "", fmt.Errorf("empty tree ref: %s", treeURL)
 	}
 
-	return parts[0], parts[1], refWithPath, "", nil
+	var repoPathParts []string
+	for _, part := range parts[4:] {
+		if strings.TrimSpace(part) == "" {
+			continue
+		}
+		unescaped, err := url.PathUnescape(part)
+		if err != nil {
+			return "", "", "", "", fmt.Errorf("invalid tree path: %w", err)
+		}
+		unescaped = strings.TrimSpace(unescaped)
+		if unescaped == "" {
+			continue
+		}
+		repoPathParts = append(repoPathParts, unescaped)
+	}
+	repoPath := strings.Trim(strings.Join(repoPathParts, "/"), "/")
+	return parts[0], parts[1], ref, repoPath, nil
 }

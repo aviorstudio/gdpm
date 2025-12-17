@@ -17,13 +17,16 @@ import (
 )
 
 type AddOptions struct {
-	Spec        string
-	AllowLinked bool
+	Spec string
 }
 
 func Add(ctx context.Context, opts AddOptions) error {
-	if opts.Spec == "" {
+	specInput := strings.TrimSpace(opts.Spec)
+	if specInput == "" {
 		return fmt.Errorf("%w: missing plugin spec", ErrUserInput)
+	}
+	if !strings.HasPrefix(specInput, "@") {
+		specInput = "@" + specInput
 	}
 
 	startDir, err := os.Getwd()
@@ -45,20 +48,30 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return err
 	}
 
-	pkg, err := spec.ParsePackageSpec(opts.Spec)
+	pkg, err := spec.ParsePackageSpec(specInput)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
 	}
 
-	if existing, ok := m.Plugins[pkg.Name()]; ok && strings.TrimSpace(existing.Link) != "" && !opts.AllowLinked {
-		return fmt.Errorf("%w: plugin is linked (run `gdpm unlink %s` first)", ErrUserInput, pkg.Name())
-	}
+	existing, hasExisting := m.Plugins[pkg.Name()]
+	isLinked := hasExisting && pluginLinkEnabled(existing)
 
 	db := gdpmdb.NewDefaultClient()
 
 	resolved, err := db.ResolvePlugin(ctx, pkg.Owner, pkg.Repo, pkg.Version)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUserInput, err)
+	}
+
+	if isLinked {
+		existing.Repo = gdpmdb.GitHubTreeURLWithPath(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA, resolved.GitHubSubdir)
+		existing.Version = resolved.Version
+		m = manifest.UpsertPlugin(m, pkg.Name(), existing)
+		if err := manifest.Save(manifestPath, m); err != nil {
+			return err
+		}
+		fmt.Printf("updated %s@%s (linked)\n", pkg.Name(), resolved.Version)
+		return nil
 	}
 
 	tmpDir, err := os.MkdirTemp("", "gdpm-add-*")
@@ -133,10 +146,14 @@ func Add(ctx context.Context, opts AddOptions) error {
 		return fmt.Errorf("%w: installed addon is missing plugin.cfg at %s", ErrUserInput, filepath.Join(dst, "plugin.cfg"))
 	}
 
+	var link *manifest.Link
+	if hasExisting {
+		link = existing.Link
+	}
 	m = manifest.UpsertPlugin(m, pkg.Name(), manifest.Plugin{
 		Repo:    gdpmdb.GitHubTreeURLWithPath(resolved.GitHubOwner, resolved.GitHubRepo, resolved.SHA, resolved.GitHubSubdir),
 		Version: resolved.Version,
-		Link:    "",
+		Link:    link,
 	})
 	if err := manifest.Save(manifestPath, m); err != nil {
 		return err

@@ -18,11 +18,14 @@ go build ./cmd/gdpm
 gdpm init
 gdpm add @username/plugin@1.2.3
 gdpm add @username/plugin
+gdpm install
 gdpm remove @username/plugin
 gdpm link @username/plugin /absolute/path/to/addons/dir
+gdpm link @username/plugin
 gdpm unlink @username/plugin
-gdpm unlink @name
 ```
+
+See [`USAGE.md`](USAGE.md) for complete command behavior and state-dependent cases.
 
 `gdpm link` will create a plugin entry in `gdpm.json` if it doesn't exist yet (as a local-only plugin, without a `repo`).
 
@@ -30,19 +33,24 @@ gdpm unlink @name
 
 ```json
 {
-  "schemaVersion": "0.0.3",
   "plugins": {
     "@user/plugin": {
       "repo": "https://github.com/owner/repo/tree/<sha>",
       "version": "1.2.3",
-      "link": "~/dev/plugin"
+      "link": {
+        "enabled": true,
+        "path": "~/dev/plugin"
+      }
     },
     "@user/monorepo_plugin": {
       "repo": "https://github.com/owner/monorepo/tree/<sha>/path/to/addon",
       "version": "1.2.3"
     },
     "@user/other": {
-      "link": "~/dev/other"
+      "link": {
+        "enabled": true,
+        "path": "~/dev/other"
+      }
     }
   }
 }

@@ -7,23 +7,19 @@ import (
 	"testing"
 )
 
-func TestLoadLegacySchemaVersion(t *testing.T) {
+func TestSave_DoesNotWriteSchemaVersion(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "gdpm.json")
-	if err := os.WriteFile(p, []byte(`{"schemaVersion":"0.0.1","plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3"}}}`), 0o644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
 
-	m, err := Load(p)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if m.SchemaVersion != "0.0.1" {
-		t.Fatalf("expected schemaVersion=0.0.1, got %q", m.SchemaVersion)
-	}
-	if got := m.Plugins["@user/plugin"].Version; got != "1.2.3" {
-		t.Fatalf("expected version=1.2.3, got %q", got)
-	}
+	m := New()
+	m = UpsertPlugin(m, "@user/plugin", Plugin{
+		Repo:    "https://example.com",
+		Version: "1.2.3",
+		Link: &Link{
+			Enabled: true,
+			Path:    "~/dev/plugin",
+		},
+	})
 
 	if err := Save(p, m); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -32,15 +28,15 @@ func TestLoadLegacySchemaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(string(b), `"schemaVersion": "0.0.3"`) {
-		t.Fatalf("expected saved file to upgrade schemaVersion to 0.0.3, got:\n%s", string(b))
+	if strings.Contains(string(b), "schemaVersion") {
+		t.Fatalf("expected saved file not to include schemaVersion, got:\n%s", string(b))
 	}
 }
 
-func TestLoadCurrentSchemaVersionWithLink(t *testing.T) {
+func TestLoad_LinkObjectWithLink(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "gdpm.json")
-	if err := os.WriteFile(p, []byte(`{"schemaVersion":"0.0.3","plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","link":"~/dev/plugin"}}}`), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","link":{"enabled":true,"path":"~/dev/plugin"}}}}`), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -48,31 +44,81 @@ func TestLoadCurrentSchemaVersionWithLink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got := m.Plugins["@user/plugin"].Link; got != "~/dev/plugin" {
-		t.Fatalf("expected link=~/dev/plugin, got %q", got)
+	if m.Plugins["@user/plugin"].Link == nil {
+		t.Fatalf("expected link to be set")
+	}
+	if got := m.Plugins["@user/plugin"].Link.Path; got != "~/dev/plugin" {
+		t.Fatalf("expected link.path=~/dev/plugin, got %q", got)
+	}
+	if got := m.Plugins["@user/plugin"].Link.Enabled; got != true {
+		t.Fatalf("expected link.enabled=true, got %v", got)
 	}
 }
 
-func TestLoadSchemaVersionWithPath_MapsToLink(t *testing.T) {
+func TestLoad_RejectsSchemaVersion(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "gdpm.json")
-	if err := os.WriteFile(p, []byte(`{"schemaVersion":"0.0.2","plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","path":"~/dev/plugin"}}}`), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"schemaVersion":"0.0.1","plugins":{}}`), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	m, err := Load(p)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got := m.Plugins["@user/plugin"].Link; got != "~/dev/plugin" {
-		t.Fatalf("expected link=~/dev/plugin, got %q", got)
+	if _, err := Load(p); err == nil {
+		t.Fatalf("expected error")
 	}
 }
 
-func TestLoadUnsupportedSchemaVersion(t *testing.T) {
+func TestLoad_RejectsLegacyLinkString(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "gdpm.json")
-	if err := os.WriteFile(p, []byte(`{"schemaVersion":"9.9.9","plugins":{}}`), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","link":"~/dev/plugin"}}}`), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if _, err := Load(p); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestLoad_RejectsLegacyPathField(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "gdpm.json")
+	if err := os.WriteFile(p, []byte(`{"plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","path":"~/dev/plugin"}}}`), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if _, err := Load(p); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestLoad_RejectsUnknownLinkField(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "gdpm.json")
+	if err := os.WriteFile(p, []byte(`{"plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","link":{"enabled":true,"path":"~/dev/plugin","extra":true}}}}`), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if _, err := Load(p); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestLoad_RejectsLinkEnabledWithoutPath(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "gdpm.json")
+	if err := os.WriteFile(p, []byte(`{"plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","link":{"enabled":true}}}}`), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if _, err := Load(p); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestLoad_RejectsLinkMissingEnabled(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "gdpm.json")
+	if err := os.WriteFile(p, []byte(`{"plugins":{"@user/plugin":{"repo":"https://example.com","version":"1.2.3","link":{"path":"~/dev/plugin"}}}}`), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 

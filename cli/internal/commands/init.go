@@ -20,8 +20,8 @@ func Init(ctx context.Context, _ InitOptions) error {
 		return err
 	}
 
-	if dir, ok := project.FindManifestDir(startDir); ok {
-		return fmt.Errorf("%w: gdpm.json already exists at %s", ErrUserInput, filepath.Join(dir, "gdpm.json"))
+	if _, ok := project.FindManifestDir(startDir); ok {
+		return nil
 	}
 
 	targetDir := startDir
