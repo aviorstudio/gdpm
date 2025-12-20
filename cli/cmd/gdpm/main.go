@@ -158,20 +158,33 @@ func runLink(args []string) int {
 func runUnlink(args []string) int {
 	fs := flag.NewFlagSet("unlink", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	all := fs.Bool("all", false, "unlink all linked plugins")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if fs.NArg() != 1 {
+	if *all {
+		if fs.NArg() != 0 {
+			fmt.Fprintln(os.Stderr, "usage: gdpm unlink --all")
+			return 2
+		}
+	} else if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: gdpm unlink @username/plugin")
+		fmt.Fprintln(os.Stderr, "       gdpm unlink --all")
 		return 2
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	if err := commands.Unlink(ctx, commands.UnlinkOptions{
-		Spec: fs.Arg(0),
-	}); err != nil {
+	var err error
+	if *all {
+		err = commands.UnlinkAll(ctx, commands.UnlinkAllOptions{})
+	} else {
+		err = commands.Unlink(ctx, commands.UnlinkOptions{
+			Spec: fs.Arg(0),
+		})
+	}
+	if err != nil {
 		if errors.Is(err, commands.ErrUserInput) {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
@@ -217,6 +230,7 @@ Usage:
   gdpm remove @username/plugin
   gdpm link @username/plugin [local_path]
   gdpm unlink @username/plugin
+  gdpm unlink --all
 
 Environment:
   GITHUB_TOKEN   Optional GitHub token to avoid rate limits.`)

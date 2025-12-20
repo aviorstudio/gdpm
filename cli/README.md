@@ -23,6 +23,7 @@ gdpm remove @username/plugin
 gdpm link @username/plugin /absolute/path/to/addons/dir
 gdpm link @username/plugin
 gdpm unlink @username/plugin
+gdpm unlink --all
 ```
 
 See [`USAGE.md`](USAGE.md) for complete command behavior and state-dependent cases.
