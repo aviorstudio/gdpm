@@ -134,18 +134,37 @@ func TestLink_OverwritesExistingAddonsDirWhenNotInManifest(t *testing.T) {
 		t.Fatalf("expected dst to be symlink, got mode %v", info.Mode())
 	}
 
-	m2, err := manifest.Load(filepath.Join(projectDir, "gdpm.json"))
+	gdpmPath := filepath.Join(projectDir, "gdpm.json")
+	m2, err := manifest.Load(gdpmPath)
 	if err != nil {
 		t.Fatalf("read gdpm.json: %v", err)
 	}
-	if m2.Plugins["@user/plugin"].Link == nil {
-		t.Fatalf("expected gdpm.json link to be set")
+	if _, ok := m2.Plugins["@user/plugin"]; !ok {
+		t.Fatalf("expected plugin entry to exist in gdpm.json")
 	}
-	if got := m2.Plugins["@user/plugin"].Link.Path; got != pluginDir {
-		t.Fatalf("expected gdpm.json link.path %q, got %q", pluginDir, got)
+
+	gdpmBytes, err := os.ReadFile(gdpmPath)
+	if err != nil {
+		t.Fatalf("read gdpm.json bytes: %v", err)
 	}
-	if got := m2.Plugins["@user/plugin"].Link.Enabled; got != true {
-		t.Fatalf("expected gdpm.json link.enabled=true, got %v", got)
+	if strings.Contains(string(gdpmBytes), `"link"`) {
+		t.Fatalf("expected gdpm.json to not contain link config, got:\n%s", string(gdpmBytes))
+	}
+
+	linkManifestPath := filepath.Join(projectDir, manifest.LinkFilename)
+	lm, err := manifest.LoadLinkManifest(linkManifestPath)
+	if err != nil {
+		t.Fatalf("read gdpm.link.json: %v", err)
+	}
+	link, ok := lm.Plugins["@user/plugin"]
+	if !ok {
+		t.Fatalf("expected gdpm.link.json entry for @user/plugin")
+	}
+	if got := link.Path; got != pluginDir {
+		t.Fatalf("expected gdpm.link.json path %q, got %q", pluginDir, got)
+	}
+	if got := link.Enabled; got != true {
+		t.Fatalf("expected gdpm.link.json enabled=true, got %v", got)
 	}
 }
 
@@ -274,18 +293,37 @@ func TestLink_UsesStoredPathWhenNoPathProvided(t *testing.T) {
 		}
 	}
 
-	m2, err := manifest.Load(filepath.Join(projectDir, "gdpm.json"))
+	gdpmPath := filepath.Join(projectDir, "gdpm.json")
+	m2, err := manifest.Load(gdpmPath)
 	if err != nil {
 		t.Fatalf("read gdpm.json: %v", err)
 	}
-	if m2.Plugins["@user/plugin"].Link == nil {
-		t.Fatalf("expected gdpm.json link to be set")
+	if _, ok := m2.Plugins["@user/plugin"]; !ok {
+		t.Fatalf("expected plugin entry to exist in gdpm.json")
 	}
-	if got := m2.Plugins["@user/plugin"].Link.Path; got != pluginDir {
-		t.Fatalf("expected gdpm.json link.path %q, got %q", pluginDir, got)
+
+	gdpmBytes, err := os.ReadFile(gdpmPath)
+	if err != nil {
+		t.Fatalf("read gdpm.json bytes: %v", err)
 	}
-	if got := m2.Plugins["@user/plugin"].Link.Enabled; got != true {
-		t.Fatalf("expected gdpm.json link.enabled=true, got %v", got)
+	if strings.Contains(string(gdpmBytes), `"link"`) {
+		t.Fatalf("expected gdpm.json to not contain link config, got:\n%s", string(gdpmBytes))
+	}
+
+	linkManifestPath := filepath.Join(projectDir, manifest.LinkFilename)
+	lm, err := manifest.LoadLinkManifest(linkManifestPath)
+	if err != nil {
+		t.Fatalf("read gdpm.link.json: %v", err)
+	}
+	link, ok := lm.Plugins["@user/plugin"]
+	if !ok {
+		t.Fatalf("expected gdpm.link.json entry for @user/plugin")
+	}
+	if got := link.Path; got != pluginDir {
+		t.Fatalf("expected gdpm.link.json path %q, got %q", pluginDir, got)
+	}
+	if got := link.Enabled; got != true {
+		t.Fatalf("expected gdpm.link.json enabled=true, got %v", got)
 	}
 }
 

@@ -36,24 +36,35 @@ See [`USAGE.md`](USAGE.md) for complete command behavior and state-dependent cas
   "plugins": {
     "@user/plugin": {
       "repo": "https://github.com/owner/repo/tree/<sha>",
-      "version": "1.2.3",
-      "link": {
-        "enabled": true,
-        "path": "~/dev/plugin"
-      }
+      "version": "1.2.3"
     },
     "@user/monorepo_plugin": {
       "repo": "https://github.com/owner/monorepo/tree/<sha>/path/to/addon",
       "version": "1.2.3"
     },
     "@user/other": {
-      "link": {
-        "enabled": true,
-        "path": "~/dev/other"
-      }
     }
   }
 }
 ```
+
+`gdpm.link.json` stores per-user link state and paths (add it to your `.gitignore`):
+
+```json
+{
+  "plugins": {
+    "@user/plugin": {
+      "enabled": true,
+      "path": "~/dev/plugin"
+    },
+    "@user/other": {
+      "enabled": true,
+      "path": "~/dev/other"
+    }
+  }
+}
+```
+
+`gdpm.json` should not contain any `"link"` fields.
 
 If you hit GitHub rate limits, set `GITHUB_TOKEN`.

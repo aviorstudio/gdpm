@@ -87,21 +87,36 @@ func TestUnlink_RemovesSymlinkWhenNoRepo(t *testing.T) {
 		t.Fatalf("expected plugin to be disabled in project.godot, got:\n%s", out)
 	}
 
-	m2, err := manifest.Load(filepath.Join(projectDir, "gdpm.json"))
+	gdpmPath := filepath.Join(projectDir, "gdpm.json")
+	m2, err := manifest.Load(gdpmPath)
 	if err != nil {
 		t.Fatalf("read gdpm.json: %v", err)
 	}
-	p, ok := m2.Plugins["@user/plugin"]
-	if !ok {
+	if _, ok := m2.Plugins["@user/plugin"]; !ok {
 		t.Fatalf("expected plugin to remain in gdpm.json")
 	}
-	if p.Link == nil {
-		t.Fatalf("expected link to remain in gdpm.json")
+
+	gdpmBytes, err := os.ReadFile(gdpmPath)
+	if err != nil {
+		t.Fatalf("read gdpm.json bytes: %v", err)
 	}
-	if p.Link.Enabled {
-		t.Fatalf("expected link.enabled=false, got true")
+	if strings.Contains(string(gdpmBytes), `"link"`) {
+		t.Fatalf("expected gdpm.json to not contain link config, got:\n%s", string(gdpmBytes))
 	}
-	if got := p.Link.Path; got != pluginDir {
-		t.Fatalf("expected link.path %q, got %q", pluginDir, got)
+
+	linkManifestPath := filepath.Join(projectDir, manifest.LinkFilename)
+	lm, err := manifest.LoadLinkManifest(linkManifestPath)
+	if err != nil {
+		t.Fatalf("read gdpm.link.json: %v", err)
+	}
+	link, ok := lm.Plugins["@user/plugin"]
+	if !ok {
+		t.Fatalf("expected gdpm.link.json entry for @user/plugin")
+	}
+	if link.Enabled {
+		t.Fatalf("expected gdpm.link.json enabled=false, got true")
+	}
+	if got := link.Path; got != pluginDir {
+		t.Fatalf("expected gdpm.link.json path %q, got %q", pluginDir, got)
 	}
 }

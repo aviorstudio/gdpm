@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aviorstudio/gdpm/cli/internal/fsutil"
 )
+
+const LinkFilename = "gdpm.link.json"
 
 type Manifest struct {
 	Plugins map[string]Plugin `json:"plugins"`
@@ -23,6 +26,10 @@ type Plugin struct {
 type Link struct {
 	Enabled bool   `json:"enabled"`
 	Path    string `json:"path,omitempty"`
+}
+
+type LinkManifest struct {
+	Plugins map[string]Link `json:"plugins"`
 }
 
 func (l *Link) UnmarshalJSON(data []byte) error {
@@ -81,7 +88,9 @@ func (p *Plugin) UnmarshalJSON(data []byte) error {
 	}
 	for k := range raw {
 		switch k {
-		case "repo", "version", "link":
+		case "repo", "version":
+		case "link":
+			return fmt.Errorf("gdpm.json no longer supports link configuration (move it to %s)", LinkFilename)
 		default:
 			return fmt.Errorf("unknown field %q", k)
 		}
@@ -90,7 +99,6 @@ func (p *Plugin) UnmarshalJSON(data []byte) error {
 	var tmp struct {
 		Repo    string `json:"repo,omitempty"`
 		Version string `json:"version,omitempty"`
-		Link    *Link  `json:"link,omitempty"`
 	}
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
@@ -99,7 +107,6 @@ func (p *Plugin) UnmarshalJSON(data []byte) error {
 	*p = Plugin{
 		Repo:    tmp.Repo,
 		Version: tmp.Version,
-		Link:    tmp.Link,
 	}
 	return nil
 }
@@ -125,12 +132,83 @@ func Load(path string) (Manifest, error) {
 	if m.Plugins == nil {
 		m.Plugins = map[string]Plugin{}
 	}
+
+	linkPath := filepath.Join(filepath.Dir(path), LinkFilename)
+	lm, err := LoadLinkManifest(linkPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return Manifest{}, err
+		}
+		return m, nil
+	}
+	for name, link := range lm.Plugins {
+		plugin, ok := m.Plugins[name]
+		if !ok {
+			continue
+		}
+		l := link
+		plugin.Link = &l
+		m.Plugins[name] = plugin
+	}
+
 	return m, nil
 }
 
 func Save(path string, m Manifest) error {
 	if m.Plugins == nil {
 		m.Plugins = map[string]Plugin{}
+	}
+
+	linkPath := filepath.Join(filepath.Dir(path), LinkFilename)
+	links := LinkManifest{Plugins: map[string]Link{}}
+	outManifest := Manifest{Plugins: map[string]Plugin{}}
+	for name, plugin := range m.Plugins {
+		if plugin.Link != nil {
+			links.Plugins[name] = *plugin.Link
+		}
+		plugin.Link = nil
+		outManifest.Plugins[name] = plugin
+	}
+
+	if len(links.Plugins) != 0 {
+		if err := SaveLinkManifest(linkPath, links); err != nil {
+			return err
+		}
+	} else {
+		if err := os.Remove(linkPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	out, err := json.MarshalIndent(outManifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	out = append(out, '\n')
+	return fsutil.WriteFileAtomic(path, out, 0o644)
+}
+
+func LoadLinkManifest(path string) (LinkManifest, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return LinkManifest{}, err
+	}
+
+	var m LinkManifest
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&m); err != nil {
+		return LinkManifest{}, err
+	}
+	if m.Plugins == nil {
+		m.Plugins = map[string]Link{}
+	}
+	return m, nil
+}
+
+func SaveLinkManifest(path string, m LinkManifest) error {
+	if m.Plugins == nil {
+		m.Plugins = map[string]Link{}
 	}
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
